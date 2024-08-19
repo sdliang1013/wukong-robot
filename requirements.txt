@@ -1,3 +1,7 @@
+--index-url http://192.168.0.113:5080/root/pypi/+simple/
+#--extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple
+--trusted-host 192.168.0.113 pypi.tuna.tsinghua.edu.cn
+
 pyyaml>=4.2b1
 requests==2.31.0
 baidu-aip==2.0.0.1
@@ -14,7 +18,7 @@ websocket-client
 pypinyin
 jieba
 pvporcupine
-pvrecorder==1.1.1
+pvrecorder~=1.2.2
 openai
 apscheduler
 asyncio

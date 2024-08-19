@@ -18,7 +18,7 @@ class Job(object):
     def __init__(self, remind_time, original_time, content, describe, job_id):
         self.remind_time = remind_time
         self.original_time = original_time
-        self.content = utils.stripPunctuation(content)
+        self.content = utils.strip_punctuation(content)
         self.describe = describe
         self.job_id = job_id
 

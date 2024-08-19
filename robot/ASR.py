@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
 from aip import AipSpeech
-from .sdk import TencentSpeech, AliSpeech, XunfeiSpeech, BaiduSpeech, FunASREngine
-from . import utils, config
-from robot import logging
+from robot.sdk import TencentSpeech, AliSpeech, XunfeiSpeech, BaiduSpeech, FunASREngine
+from robot import logging, utils, config
 from abc import ABCMeta, abstractmethod
 import requests
 
@@ -40,7 +39,7 @@ class AzureASR(AbstractASR):
     SLUG = "azure-asr"
 
     def __init__(self, secret_key, region, lang="zh-CN", **args):
-        super(self.__class__, self).__init__()
+        super(AzureASR, self).__init__()
         self.post_url = "https://<REGION_IDENTIFIER>.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1".replace(
             "<REGION_IDENTIFIER>", region
         )
@@ -102,7 +101,7 @@ class BaiduASR(AbstractASR):
     SLUG = "baidu-asr"
 
     def __init__(self, appid, api_key, secret_key, dev_pid=1936, **args):
-        super(self.__class__, self).__init__()
+        super(BaiduASR, self).__init__()
         if dev_pid != 80001:
             self.client = AipSpeech(appid, api_key, secret_key)
         else:
@@ -124,7 +123,9 @@ class BaiduASR(AbstractASR):
         else:
             logger.info(f"{self.SLUG} 语音识别出错了: {res['err_msg']}")
             if res["err_msg"] == "request pv too much":
-                logger.info("       出现这个原因很可能是你的百度语音服务调用量超出限制，或未开通付费")
+                logger.info(
+                    "       出现这个原因很可能是你的百度语音服务调用量超出限制，或未开通付费"
+                )
             return ""
 
 
@@ -136,7 +137,7 @@ class TencentASR(AbstractASR):
     SLUG = "tencent-asr"
 
     def __init__(self, appid, secretid, secret_key, region="ap-guangzhou", **args):
-        super(self.__class__, self).__init__()
+        super(TencentASR, self).__init__()
         self.engine = TencentSpeech.tencentSpeech(secret_key, secretid)
         self.region = region
 
@@ -167,7 +168,7 @@ class XunfeiASR(AbstractASR):
     SLUG = "xunfei-asr"
 
     def __init__(self, appid, api_key, api_secret, **args):
-        super(self.__class__, self).__init__()
+        super(XunfeiASR, self).__init__()
         self.appid = appid
         self.api_key = api_key
         self.api_secret = api_secret
@@ -189,7 +190,7 @@ class AliASR(AbstractASR):
     SLUG = "ali-asr"
 
     def __init__(self, appKey, token, **args):
-        super(self.__class__, self).__init__()
+        super(AliASR, self).__init__()
         self.appKey, self.token = appKey, token
 
     @classmethod
@@ -215,7 +216,7 @@ class WhisperASR(AbstractASR):
     SLUG = "openai"
 
     def __init__(self, openai_api_key, **args):
-        super(self.__class__, self).__init__()
+        super(WhisperASR, self).__init__()
         try:
             import openai
 
@@ -243,6 +244,7 @@ class WhisperASR(AbstractASR):
         logger.critical(f"{self.SLUG} 语音识别出错了", stack_info=True)
         return ""
 
+
 class FunASR(AbstractASR):
     """
     达摩院FunASR实时语音转写服务软件包
@@ -251,7 +253,7 @@ class FunASR(AbstractASR):
     SLUG = "fun-asr"
 
     def __init__(self, inference_type, model_dir, **args):
-        super(self.__class__, self).__init__()
+        super(FunASR, self).__init__()
         self.engine = FunASREngine.funASREngine(inference_type, model_dir)
 
     @classmethod
@@ -266,6 +268,7 @@ class FunASR(AbstractASR):
         else:
             logger.critical(f"{self.SLUG} 语音识别出错了", stack_info=True)
             return ""
+
 
 def get_engine_by_slug(slug=None):
     """

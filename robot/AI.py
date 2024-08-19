@@ -57,7 +57,7 @@ class TulingRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripPunctuation(msg)
+        msg = utils.strip_punctuation(msg)
         try:
             url = "http://openapi.turingapi.com/openapi/api/v2"
             userid = str(get_mac())[:32]
@@ -104,7 +104,7 @@ class UnitRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripPunctuation(msg)
+        msg = utils.strip_punctuation(msg)
         try:
             result = unit.getSay(parsed)
             logger.info("{} 回答：{}".format(self.SLUG, result))
@@ -138,23 +138,25 @@ class BingRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripPunctuation(msg)
+        msg = utils.strip_punctuation(msg)
         try:
             import asyncio, json
             from EdgeGPT.EdgeGPT import Chatbot, ConversationStyle
 
             async def query_bing():
                 # Passing cookies is "optional"
-                bot = await Chatbot.create(proxy=self.proxy) 
+                bot = await Chatbot.create(proxy=self.proxy)
                 m2s = {
                     "creative": ConversationStyle.creative,
                     "balanced": ConversationStyle.balanced,
-                    "precise": ConversationStyle.precise
+                    "precise": ConversationStyle.precise,
                 }
-                response = await bot.ask(prompt=self.prefix + "\n" + msg,
-                                         conversation_style=m2s[self.mode],
-                                         simplify_response=True)
-                #print(json.dumps(response, indent=2)) # Returns
+                response = await bot.ask(
+                    prompt=self.prefix + "\n" + msg,
+                    conversation_style=m2s[self.mode],
+                    simplify_response=True,
+                )
+                # print(json.dumps(response, indent=2)) # Returns
                 return response["text"]
                 await bot.close()
 
@@ -194,7 +196,7 @@ class AnyQRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripPunctuation(msg)
+        msg = utils.strip_punctuation(msg)
         try:
             url = f"http://{self.host}:{self.port}/anyq?question={msg}"
             r = requests.get(url)
@@ -226,6 +228,7 @@ class AnyQRobot(AbstractRobot):
             logger.critical("AnyQ robot failed to response for %r", msg, exc_info=True)
             return "抱歉, AnyQ回答失败"
 
+
 class OPENAIRobot(AbstractRobot):
 
     SLUG = "openai"
@@ -249,7 +252,7 @@ class OPENAIRobot(AbstractRobot):
         """
         OpenAI机器人
         """
-        super(self.__class__, self).__init__()
+        super(OPENAIRobot, self).__init__()
         self.openai = None
         try:
             import openai
@@ -291,7 +294,7 @@ class OPENAIRobot(AbstractRobot):
         """
 
         msg = "".join(texts)
-        msg = utils.stripPunctuation(msg)
+        msg = utils.strip_punctuation(msg)
         msg = self.prefix + msg  # 增加一段前缀
         logger.info("msg: " + msg)
         self.context.append({"role": "user", "content": msg})
@@ -300,17 +303,19 @@ class OPENAIRobot(AbstractRobot):
             "Content-Type": "application/json",
             # "Authorization": "Bearer " + self.openai.api_key
         }
-        if self.provider == 'openai':
-            header['Authorization'] = "Bearer " + self.openai.api_key
-        elif self.provider == 'azure':
-            header['api-key'] = self.openai.api_key
+        if self.provider == "openai":
+            header["Authorization"] = "Bearer " + self.openai.api_key
+        elif self.provider == "azure":
+            header["api-key"] = self.openai.api_key
         else:
-            raise ValueError("Please check your config file, OpenAiRobot's provider should be openai or azure.")
+            raise ValueError(
+                "Please check your config file, OpenAiRobot's provider should be openai or azure."
+            )
 
         data = {"model": self.model, "messages": self.context, "stream": True}
         logger.info(f"使用模型：{self.model}，开始流式请求")
         url = self.api_base + "/completions"
-        if self.provider == 'azure':
+        if self.provider == "azure":
             url = f"{self.api_base}/openai/deployments/{self.model}/chat/completions?api-version={self.api_version}"
         # 请求接收流式数据
         try:
@@ -373,7 +378,7 @@ class OPENAIRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripPunctuation(msg)
+        msg = utils.strip_punctuation(msg)
         msg = self.prefix + msg  # 增加一段前缀
         logger.info("msg: " + msg)
         try:
@@ -389,18 +394,18 @@ class OPENAIRobot(AbstractRobot):
                     frequency_penalty=self.frequency_penalty,
                     presence_penalty=self.presence_penalty,
                     stop=self.stop_ai,
-                    api_base=self.api_base
+                    api_base=self.api_base,
                 )
             else:
                 from openai import AzureOpenAI
+
                 client = AzureOpenAI(
-                            azure_endpoint = self.api_base, 
-                            api_key=self.openai_api_key,  
-                            api_version=self.api_version
-                            )
+                    azure_endpoint=self.api_base,
+                    api_key=self.openai_api_key,
+                    api_version=self.api_version,
+                )
                 response = client.chat.completions.create(
-                    model=self.model,
-                    messages=self.context
+                    model=self.model, messages=self.context
                 )
             message = response.choices[0].message
             respond = message.content
@@ -416,8 +421,9 @@ class OPENAIRobot(AbstractRobot):
             )
             return "抱歉，OpenAI 回答失败"
 
+
 class WenxinRobot(AbstractRobot):
-    
+
     SLUG = "wenxin"
 
     def __init__(self, api_key, secret_key):
@@ -427,7 +433,7 @@ class WenxinRobot(AbstractRobot):
         super(self.__class__, self).__init__()
         self.api_key = api_key
         self.secret_key = secret_key
-        
+
     @classmethod
     def get_config(cls):
         return config.get("wenxin", {})
@@ -440,71 +446,79 @@ class WenxinRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripPunctuation(msg)
+        msg = utils.strip_punctuation(msg)
         wenxinurl = f"https://aip.baidubce.com/oauth/2.0/token?client_id={self.api_key}&\
                     client_secret={self.secret_key}&grant_type=client_credentials"
         try:
             headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json",
+            }
+            payload = json.dumps(
+                {
+                    "question": [
+                        {
+                            "role": "user",
+                            "content": msg,
+                        }
+                    ]
                 }
-            payload = json.dumps({
-                "question": [
-                    {
-                        "role": "user",
-                        "content": msg,
-                    }
-                ]
-                })
+            )
             response = requests.request("POST", wenxinurl, headers=headers)
             logger.info(f"wenxin response: {response}")
             return response.text
-        
+
         except Exception:
-            logger.critical("Wenxin robot failed to response for %r", msg, exc_info=True)
+            logger.critical(
+                "Wenxin robot failed to response for %r", msg, exc_info=True
+            )
             return "抱歉, Wenxin回答失败"
 
+
 class TongyiRobot(AbstractRobot):
-        '''
-        usage:
-        pip install dashscope
-        echo "export DASHSCOPE_API_KEY=YOUR_KEY" >> /.bashrc
-        '''
-        SLUG = "tongyi"
-    
-        def __init__(self, api_key):
-            """
-            Tongyi机器人
-            """
-            super(self.__class__, self).__init__()
-            self.api_key = api_key
-            
-        @classmethod
-        def get_config(cls):
-            return config.get("tongyi", {})
-    
-        def chat(self, texts, _):
-            """
-            使用Tongyi机器人聊天
-    
-            Arguments:
-            texts -- user input, typically speech, to be parsed by a module
-            """
-            msg = "".join(texts)
-            msg = utils.stripPunctuation(msg)
-            msg = [{"role": "user", "content": msg}]
-            try:
-                response = dashscope.Generation.call(
-                    model='qwen1.5-72b-chat',
-                    messages=msg,
-                    result_format='message',  # set the result to be "message" format.
-                )
-                logger.info(f"tongyi response: {response}")
-                return response['output']['choices'][0]['message']['content']
-            
-            except Exception:
-                logger.critical("Tongyi robot failed to response for %r", msg, exc_info=True)
-                return "抱歉, Tongyi回答失败"
+    """
+    usage:
+    pip install dashscope
+    echo "export DASHSCOPE_API_KEY=YOUR_KEY" >> /.bashrc
+    """
+
+    SLUG = "tongyi"
+
+    def __init__(self, api_key):
+        """
+        Tongyi机器人
+        """
+        super(self.__class__, self).__init__()
+        self.api_key = api_key
+
+    @classmethod
+    def get_config(cls):
+        return config.get("tongyi", {})
+
+    def chat(self, texts, _):
+        """
+        使用Tongyi机器人聊天
+
+        Arguments:
+        texts -- user input, typically speech, to be parsed by a module
+        """
+        msg = "".join(texts)
+        msg = utils.strip_punctuation(msg)
+        msg = [{"role": "user", "content": msg}]
+        try:
+            response = dashscope.Generation.call(
+                model="qwen1.5-72b-chat",
+                messages=msg,
+                result_format="message",  # set the result to be "message" format.
+            )
+            logger.info(f"tongyi response: {response}")
+            return response["output"]["choices"][0]["message"]["content"]
+
+        except Exception:
+            logger.critical(
+                "Tongyi robot failed to response for %r", msg, exc_info=True
+            )
+            return "抱歉, Tongyi回答失败"
 
 
 def get_unknown_response():
@@ -513,7 +527,13 @@ def get_unknown_response():
 
     :returns: 表示不知道的答复
     """
-    results = ["抱歉，我不会这个呢", "我不会这个呢", "我还不会这个呢", "我还没学会这个呢", "对不起，你说的这个，我还不会"]
+    results = [
+        "抱歉，我不会这个呢",
+        "我不会这个呢",
+        "我还不会这个呢",
+        "我还没学会这个呢",
+        "对不起，你说的这个，我还不会",
+    ]
     return random.choice(results)
 
 

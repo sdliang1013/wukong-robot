@@ -1,3 +1,4 @@
+import os
 import time
 
 from snowboy import snowboydecoder
@@ -27,6 +28,11 @@ def initDetector(wukong):
         if keyword_paths:
             porcupine = pvporcupine.create(
                 access_key=access_key,
+                model_path=os.path.join(
+                    os.path.dirname(__file__),
+                    os.path.pardir,
+                    "static/porcupine_params.pv",
+                ),
                 keyword_paths=[constants.getConfigData(kw) for kw in keyword_paths],
                 sensitivities=[config.get("sensitivity", 0.5)] * len(keyword_paths),
             )
@@ -45,21 +51,24 @@ def initDetector(wukong):
                 pcm = recorder.read()
 
                 result = porcupine.process(pcm)
-                if result >= 0:
-                    kw = keyword_paths[result] if keyword_paths else keywords[result]
-                    logger.info(
-                        "[porcupine] Keyword {} Detected at time {}".format(
-                            kw,
-                            time.strftime(
-                                "%Y-%m-%d %H:%M:%S", time.localtime(time.time())
-                            ),
-                        )
+                if result < 0:
+                    continue
+                kw = keyword_paths[result] if keyword_paths else keywords[result]
+                logger.info(
+                    "[porcupine] Keyword {} Detected at time {}".format(
+                        kw,
+                        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
                     )
-                    wukong._detected_callback(False)
-                    recorder.stop()
+                )
+                recorder.stop()
+                try:
+                    wukong.detected_callback(False)
                     wukong.conversation.interrupt()
                     query = wukong.conversation.activeListen()
                     wukong.conversation.doResponse(query)
+                except:
+                    logger.critical("数字人走神了.", exc_info=True)
+                finally:
                     recorder.start()
         except pvporcupine.PorcupineActivationError as e:
             logger.error("[Porcupine] AccessKey activation error", stack_info=True)

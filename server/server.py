@@ -18,6 +18,7 @@ import tornado.httpserver
 from tornado.websocket import WebSocketHandler
 from urllib.parse import unquote
 
+from robot.Sender import ExtWebSocketHandler, ACTION_ROBOT_SPEAK, StatusData
 from robot.sdk.History import History
 from robot import config, utils, logging, Updater, constants
 from tools import make_json, solr_tools
@@ -39,12 +40,24 @@ suggestions = [
 ]
 
 
+def uri_base(prefix: str) -> str:
+    return prefix
+    # base = config.get(item="/server/path", default="/sdl-robot")
+    # return rf"{base}{prefix}"
+
+
+def api_base(prefix: str) -> str:
+    return prefix
+    # base = config.get(item="/server/path", default="/sdl-robot")
+    # return rf"{base}/api{prefix}"
+
+
 class BaseHandler(tornado.web.RequestHandler):
     def isValidated(self):
         if not self.get_secure_cookie("validation"):
             return False
         return str(
-            self.get_secure_cookie("validation"), encoding="utf-8"
+            self.get_secure_cookie(name="validation"), encoding="utf-8"
         ) == config.get("/server/validate", "")
 
     def validate(self, validation):
@@ -59,10 +72,11 @@ class MainHandler(BaseHandler):
     def get(self):
         global conversation, wukong, suggestions
         if not self.isValidated():
-            self.redirect("/login")
+            self.redirect(uri_base("/login"))
             return
         if conversation:
-            info = Updater.fetch()
+            # info = Updater.fetch()
+            info = {}
             suggestion = random.choice(suggestions)
             notices = None
             if "notices" in info:
@@ -85,7 +99,7 @@ class MessageUpdatesHandler(BaseHandler):
     """
 
     async def post(self):
-        if not self.validate(self.get_argument("validate", default=None)):
+        if not self.validate(validation=self.get_argument("validate", default=None)):
             res = {"code": 1, "message": "illegal visit"}
             self.write(json.dumps(res))
         else:
@@ -152,10 +166,12 @@ class ChatHandler(BaseHandler):
         except:
             pass
 
-    def onStream(self, data, uuid):
+    def onStream(self, message, uuid, action=None):
+        logger.info(f"OnStream: {message}")
         # 通过 ChatWebSocketHandler 发送给前端
-        for client in ChatWebSocketHandler.clients:
-            client.send_response(data, uuid, "")
+        for client in ExtWebSocketHandler.clients:
+            logger.info(f"ClientOnStream: {client}")
+            client.send_response(uuid=uuid, message=message, action=action)
 
     def post(self):
         global conversation
@@ -173,7 +189,9 @@ class ChatHandler(BaseHandler):
                         onSay=lambda msg, audio, plugin: self.onResp(
                             msg, audio, plugin
                         ),
-                        onStream=lambda data, resp_uuid: self.onStream(data, resp_uuid),
+                        onStream=lambda data, resp_uuid: self.onStream(
+                            message=data, uuid=resp_uuid, action=ACTION_ROBOT_SPEAK
+                        ),
                     )
 
             elif self.get_argument("type") == "voice":
@@ -188,9 +206,7 @@ class ChatHandler(BaseHandler):
                 conversation.doConverse(
                     nfile,
                     onSay=lambda msg, audio, plugin: self.onResp(msg, audio, plugin),
-                    onStream=lambda data, resp_uuid: self.onStream(
-                        data, resp_uuid)
-
+                    onStream=lambda data, resp_uuid: self.onStream(data, resp_uuid),
                 )
             else:
                 res = {"code": 1, "message": "illegal type"}
@@ -232,7 +248,7 @@ class GetLogHandler(BaseHandler):
 class LogPageHandler(BaseHandler):
     def get(self):
         if not self.isValidated():
-            self.redirect("/login")
+            self.redirect(uri_base("/login"))
         else:
             self.render("log.html")
 
@@ -261,7 +277,7 @@ class OperateHandler(BaseHandler):
 class ConfigPageHandler(BaseHandler):
     def get(self):
         if not self.isValidated():
-            self.redirect("/login")
+            self.redirect(uri_base("/login"))
         else:
             self.render("config.html", sensitivity=config.get("sensitivity"))
 
@@ -307,7 +323,7 @@ class ConfigHandler(BaseHandler):
 class DonateHandler(BaseHandler):
     def get(self):
         if not self.isValidated():
-            self.redirect("/login")
+            self.redirect(uri_base("/login"))
             return
         r = requests.get(
             "https://raw.githubusercontent.com/wzpan/wukong-contrib/master/docs/donate.md"
@@ -322,7 +338,7 @@ class DonateHandler(BaseHandler):
 class QAHandler(BaseHandler):
     def get(self):
         if not self.isValidated():
-            self.redirect("/login")
+            self.redirect(uri_base("/login"))
         else:
             content = ""
             with open(constants.getQAPath(), "r") as f:
@@ -364,7 +380,7 @@ class QAHandler(BaseHandler):
 class APIHandler(BaseHandler):
     def get(self):
         if not self.isValidated():
-            self.redirect("/login")
+            self.redirect(uri_base("/login"))
         else:
             content = ""
             r = requests.get(
@@ -406,7 +422,7 @@ class UpdateHandler(BaseHandler):
 class LoginHandler(BaseHandler):
     def get(self):
         if self.isValidated():
-            self.redirect("/")
+            self.redirect(uri_base("/"))
         else:
             self.render("login.html", error=None)
 
@@ -420,7 +436,7 @@ class LoginHandler(BaseHandler):
         ):
             logger.info("login success")
             self.set_secure_cookie("validation", config.get("/server/validate"))
-            self.redirect("/")
+            self.redirect(uri_base("/"))
         else:
             self.render("login.html", error="登录失败")
 
@@ -429,7 +445,112 @@ class LogoutHandler(BaseHandler):
     def get(self):
         if self.isValidated():
             self.set_secure_cookie("validation", "")
-        self.redirect("/login")
+        self.redirect(uri_base("/login"))
+
+
+class ExtLoginHandler(BaseHandler):
+    def get(self):
+        if self.isValidated():
+            self.write("已登录")
+        else:
+            self.set_status(status_code=401, reason="未登录.")
+
+    def post(self):
+        if self.get_argument("username") == config.get(
+            "/server/username"
+        ) and hashlib.md5(
+            self.get_argument("password").encode("utf-8")
+        ).hexdigest() == config.get(
+            "/server/validate"
+        ):
+            logger.info("login success")
+            self.set_secure_cookie("validation", config.get("/server/validate"))
+            self.finish()
+        else:
+            self.set_status(status_code=401, reason="账号或密码错误.")
+            self.write("账号或密码错误")
+            self.finish()
+
+
+class ExtLogoutHandler(BaseHandler):
+    def get(self):
+        if self.isValidated():
+            self.set_secure_cookie("validation", "")
+        self.write("已登出")
+
+
+class DHPageHandler(BaseHandler):
+    def get(self):
+        if not self.isValidated():
+            self.redirect(uri_base("/login"))
+        else:
+            self.render(
+                template_name="digital-human.html",
+                session_id=conversation.dh and conversation.dh.sessionId,
+                play_stream_addr=conversation.dh and conversation.dh.play_stream_addr,
+                cmd_status=conversation.dh and conversation.dh.get_cmd_status(),
+            )
+
+
+class DHApiHandler(BaseHandler):
+    def get(self, action: str):
+        if not self.isValidated():
+            self.redirect(uri_base("/login"))
+            return
+        if "session-list" == action:
+            self.get_session_list()
+        elif "session-status" == action:
+            self.get_session_status()
+
+    def post(self, action: str):
+        if "session-create" == action:
+            self.create_session()
+        elif "session-open" == action:
+            self.open_session()
+        elif "session-close" == action:
+            self.close_session()
+        elif "create-cmd" == action:
+            self.create_cmd()
+
+    def get_session_list(self):
+        func = self.get_func("ListSessionOfProjectId")
+        if func:
+            self.write_data(data=func())
+
+    def get_session_status(self):
+        func = self.get_func("get_session_status")
+        if func:
+            self.write_data(data=func())
+
+    def create_session(self):
+        func = self.get_func("CreateSession")
+        if func:
+            self.write_data(data=func())
+
+    def open_session(self):
+        func = self.get_func("StartSession")
+        if func:
+            self.write_data(data=func())
+
+    def close_session(self):
+        func = self.get_func("closeAllSession")
+        if func:
+            self.write_data(data=func())
+
+    def create_cmd(self):
+        func = self.get_func("CreateCmdChannel")
+        if func:
+            self.write_data(data=func())
+
+    def get_func(self, name: str):
+        func = conversation.dh and getattr(conversation.dh, name, None)
+        if not func:
+            self.write_data(code=-1, message=f"找不到方法: {name}")
+        return func
+
+    def write_data(self, data=None, code: int = 0, message: str = "success"):
+        self.write(json.dumps(obj={"code": code, "message": message, "data": data}))
+        self.finish()
 
 
 settings = {
@@ -438,43 +559,56 @@ settings = {
     ),
     "template_path": os.path.join(constants.APP_PATH, "server/templates"),
     "static_path": os.path.join(constants.APP_PATH, "server/static"),
-    "login_url": "/login",
+    "static_url_prefix": uri_base("/static/"),
+    "login_url": uri_base("/login"),
     "debug": False,
 }
 
 application = tornado.web.Application(
     [
-        (r"/", MainHandler),
-        (r"/login", LoginHandler),
-        (r"/history", GetHistoryHandler),
-        (r"/chat", ChatHandler),
-        (r"/websocket", ChatWebSocketHandler),
-        (r"/chat/updates", MessageUpdatesHandler),
-        (r"/config", ConfigHandler),
-        (r"/configpage", ConfigPageHandler),
-        (r"/operate", OperateHandler),
-        (r"/logpage", LogPageHandler),
-        (r"/log", GetLogHandler),
-        (r"/logout", LogoutHandler),
-        (r"/api", APIHandler),
-        (r"/qa", QAHandler),
-        (r"/upgrade", UpdateHandler),
-        (r"/donate", DonateHandler),
+        (uri_base(r"/"), MainHandler),
+        (uri_base(r"/login"), LoginHandler),
+        (uri_base(r"/logout"), LogoutHandler),
+        (api_base(r"/history"), GetHistoryHandler),
+        (api_base(r"/chat"), ChatHandler),
+        # (api_base(r"/websocket"), ChatWebSocketHandler),
+        (api_base(r"/chat/updates"), MessageUpdatesHandler),
+        (api_base(r"/config"), ConfigHandler),
+        (api_base(r"/configpage"), ConfigPageHandler),
+        (api_base(r"/operate"), OperateHandler),
+        (api_base(r"/logpage"), LogPageHandler),
+        (api_base(r"/log"), GetLogHandler),
+        (api_base(r"/api"), APIHandler),
+        (api_base(r"/qa"), QAHandler),
+        (api_base(r"/upgrade"), UpdateHandler),
+        (api_base(r"/donate"), DonateHandler),
         # 废弃老接口
-        (r"/getlog", GetLogHandler),
-        (r"/gethistory", GetHistoryHandler),
-        (r"/getconfig", ConfigHandler),
+        (api_base(r"/getlog"), GetLogHandler),
+        (api_base(r"/gethistory"), GetHistoryHandler),
+        (api_base(r"/getconfig"), ConfigHandler),
+        # 自定义
+        (api_base(r"/websocket"), ExtWebSocketHandler),
+        (api_base(r"/digital-human"), DHPageHandler),
+        (api_base(r"/dh/(.*)"), DHApiHandler),
+        (api_base(r"/ext/login"), ExtLoginHandler),
+        (api_base(r"/ext/logout"), ExtLogoutHandler),
+        (api_base(r"/websocket"), ExtWebSocketHandler),
+        (api_base(r"/chat"), ChatHandler),
         (
-            r"/photo/(.+\.(?:png|jpg|jpeg|bmp|gif|JPG|PNG|JPEG|BMP|GIF))",
+            uri_base(r"/photo/(.+\.(?:png|jpg|jpeg|bmp|gif|JPG|PNG|JPEG|BMP|GIF))"),
             tornado.web.StaticFileHandler,
             {"path": config.get("/camera/dest_path", "server/static")},
         ),
         (
-            r"/audio/(.+\.(?:mp3|wav|pcm))",
+            uri_base(r"/audio/(.+\.(?:mp3|wav|pcm))"),
             tornado.web.StaticFileHandler,
             {"path": constants.TEMP_PATH},
         ),
-        (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": "server/static"}),
+        (
+            uri_base(r"/static/(.*)"),
+            tornado.web.StaticFileHandler,
+            {"path": "server/static"},
+        ),
     ],
     **settings,
 )

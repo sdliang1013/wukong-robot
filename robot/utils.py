@@ -10,7 +10,7 @@ import json
 import yaml
 import hashlib
 import subprocess
-from . import constants, config
+from robot import constants, config
 from robot import logging
 from pydub import AudioSegment
 from pytz import timezone
@@ -322,15 +322,67 @@ def validjson(s):
         return False
 
 
-def getPunctuations():
-    return [",", "，", ".", "。", "?", "？", "!", "！", "\n"]
+chinese_char_pattern = re.compile(r"[\u4e00-\u9fff]+")
+punc_cn = ["。", "？", "！", "；", "：", "、", "?", ";", "，", ",", "\n"]
+punc_en = [".", "?", "!", ";", ":", "，", ",", "\n"]
 
 
-def stripPunctuation(s):
+# whether contain chinese character
+def contains_chinese(text):
+    return bool(chinese_char_pattern.search(text))
+
+
+def get_punctuations(text):
+    if contains_chinese(text):
+        return punc_cn
+    return punc_en
+
+
+def strip_punctuation(s):
     """
     移除字符串末尾的标点
     """
-    punctuations = getPunctuations()
+    punctuations = get_punctuations(s)
     if any(s.endswith(p) for p in punctuations):
         s = s[:-1]
     return s
+
+
+def end_punctuation(s):
+    """
+    字符串末尾是标点
+    """
+    punctuations = get_punctuations(s)
+    return any(s.endswith(p) for p in punctuations)
+
+
+def split_paragraph(text: str, token_min_n=8, comma_split=True) -> list:
+    lang = contains_chinese(text=text)
+
+    def calc_utt_length(_text: str):
+        if lang == "zh":
+            return len(_text)
+        else:
+            return len(_text.encode("utf8"))
+
+    if lang == "zh":
+        pounc = punc_cn
+    else:
+        pounc = punc_en
+    if comma_split:
+        pounc.extend(["，", ","])
+    # 按标点分割
+    st = 0
+    txt_list = []
+    for i, c in enumerate(text):
+        if c in pounc:
+            # 长度不足
+            if calc_utt_length(text[st:i]) < token_min_n:
+                continue
+            if text[st:i]:
+                txt_list.append(text[st:i] + c)
+            st = i + 1
+    if st < len(text):
+        txt_list.append(text[st:])
+
+    return txt_list

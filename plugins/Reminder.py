@@ -26,7 +26,7 @@ class Plugin(AbstractPlugin):
 
     def alarm(self, remind_time, content, job_id):
         self.con.player.stop()  # 停止所有音频
-        content = utils.stripPunctuation(content)
+        content = utils.strip_punctuation(content)
         self.say(
             f"现在是{time.strftime('%H:%M:%S', time.localtime(time.time()))}，该{content}了。"
             * int(config.get("/reminder/repeat", 3))

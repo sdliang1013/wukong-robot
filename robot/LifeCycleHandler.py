@@ -5,10 +5,17 @@ import time
 import pickle
 import time
 import _thread as thread
+import random
 
 from watchdog.observers import Observer
 from robot import config, constants, statistic, Player
 from robot.ConfigMonitor import ConfigMonitor
+from robot.Sender import (
+    ACTION_ROBOT_THINK,
+    ACTION_ROBOT_WEAKUP,
+    STAGE_UNDERSTAND,
+    STAGE_SEARCH,
+)
 from robot.sdk import LED
 
 logger = logging.getLogger(__name__)
@@ -19,9 +26,9 @@ LOCAL_REMINDER = os.path.join(constants.TEMP_PATH, "reminder.pkl")
 def singleton(cls):
     _instance = {}
 
-    def inner(conversation):
+    def inner(conversation, sender=None):
         if cls not in _instance:
-            _instance[cls] = cls(conversation)
+            _instance[cls] = cls(conversation=conversation, sender=sender)
         return _instance[cls]
 
     return inner
@@ -35,15 +42,17 @@ def singleton(cls):
 
 @singleton
 class LifeCycleHandler(object):
-    def __init__(self, conversation):
+
+    def __init__(self, conversation, sender=None):
         self._observer = Observer()
         self._unihiker = None
         self._wakeup = None
         self._conversation = conversation
+        self.sender = sender
 
     def onInit(self):
         """
-        wukong-robot 初始化
+        sdl-robot 初始化
         """
         config.init()
         statistic.report(0)
@@ -110,7 +119,10 @@ class LifeCycleHandler(object):
                 bci.start()
                 thread.start_new_thread(self._muse_loop_event, ())
             except ImportError:
-                logger.error("错误：请确保当前硬件搭配了Muse头环并安装了相关驱动", stack_info=True)
+                logger.error(
+                    "错误：请确保当前硬件搭配了Muse头环并安装了相关驱动",
+                    stack_info=True,
+                )
 
     def _unihiker_shake_event(self):
         """
@@ -133,7 +145,10 @@ class LifeCycleHandler(object):
         try:
             from aiy.board import Board
         except ImportError:
-            logger.error("错误：请确保当前硬件环境为Google AIY VoiceKit并正确安装了驱动", stack_info=True)
+            logger.error(
+                "错误：请确保当前硬件环境为Google AIY VoiceKit并正确安装了驱动",
+                stack_info=True,
+            )
             return
         with Board() as board:
             while True:
@@ -156,9 +171,12 @@ class LifeCycleHandler(object):
             self._wakeup.clear()
 
     def _beep_hi(self, onCompleted=None):
+        # hi = ["在呢", "请说"]
+        # self._conversation.say(random.choice(hi), cache=True)
         Player.play(constants.getData("beep_hi.wav"), onCompleted)
 
     def _beep_lo(self):
+        # self._conversation.say("让我想一想", cache=True)
         Player.play(constants.getData("beep_lo.wav"))
 
     def onWakeup(self, onCompleted=None):
@@ -171,6 +189,12 @@ class LifeCycleHandler(object):
             LED.wakeup()
         self._unihiker and self._unihiker.record(1, "我正在聆听...")
         self._unihiker and self._unihiker.wakeup()
+        # 创建直播流会话, 返回流地址给前端
+        self.sender.send_message(
+            action=ACTION_ROBOT_WEAKUP,
+            data="rtmp://live.qq.com/live/m789",
+            message="我正在聆听...",
+        )
 
     def onThink(self):
         """
@@ -182,6 +206,12 @@ class LifeCycleHandler(object):
         self._unihiker and self._unihiker.record(1, "我正在思考...")
         if config.get("/LED/enable", False):
             LED.think()
+        # 返回思考步骤给前端
+        self.sender.send_message(
+            action=ACTION_ROBOT_THINK,
+            data=[STAGE_UNDERSTAND, STAGE_SEARCH],
+            message="我正在思考...",
+        )
 
     def onResponse(self, t=1, text=""):
         """

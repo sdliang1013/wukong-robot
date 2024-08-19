@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import time
+from typing import Tuple
 import uuid
 import cProfile
 import pstats
@@ -17,6 +18,15 @@ from robot.LifeCycleHandler import LifeCycleHandler
 from robot.Brain import Brain
 from robot.Scheduler import Scheduler
 from robot.sdk import History
+from robot.Sender import (
+    StatusData,
+    ACTION_ROBOT_LISTEN,
+    ACTION_USER_SPEAK,
+    ACTION_ROBOT_THINK,
+    STAGE_UNDERSTAND,
+    STAGE_SEARCH,
+    ACTION_ROBOT_SPEAK,
+)
 from robot import (
     AI,
     ASR,
@@ -27,16 +37,28 @@ from robot import (
     Player,
     statistic,
     TTS,
+    DigitalHuman,
     utils,
 )
+
+re_tts = {
+    "full": [
+        re.compile(r"```.+```"),
+        re.compile(pattern=r"!\[[^\]]*\]\([^\)]*\)"),
+    ],
+    "part": {r"```": r"```", r"![": r")"},
+}
 
 
 logger = logging.getLogger(__name__)
 
 
 class Conversation(object):
-    def __init__(self, profiling=False):
+
+    def __init__(self, profiling=False, sender=None):
         self.brain, self.asr, self.ai, self.tts, self.nlu = None, None, None, None, None
+        self.DigitalHumanEnabled = False
+        self.dh = None
         self.reInit()
         self.scheduler = Scheduler(self)
         # 历史会话消息
@@ -49,8 +71,9 @@ class Conversation(object):
         self.onSay = None
         self.onStream = None
         self.hasPardon = False
-        self.player = Player.SoxPlayer()
-        self.lifeCycleHandler = LifeCycleHandler(self)
+        self.player = Player.OrderPlayer()
+        self.sender = sender
+        self.lifeCycleHandler = LifeCycleHandler(self, sender=sender)
         self.tts_count = 0
         self.tts_index = 0
         self.tts_lock = threading.Lock()
@@ -68,36 +91,29 @@ class Conversation(object):
             if utils.getCache(msg):
                 logger.info(f"第{index}段TTS命中缓存，播放缓存语音")
                 voice = utils.getCache(msg)
-                while index != self.tts_index:
-                    # 阻塞直到轮到这个音频播放
-                    continue
                 with self.play_lock:
                     self.player.play(
-                        voice,
-                        not cache,
+                        src=voice,
+                        delete=not cache,
                         onCompleted=lambda: self._lastCompleted(index, onCompleted),
+                        index=index,
                     )
-                    self.tts_index += 1
                 return voice
             else:
                 try:
                     voice = self.tts.get_speech(msg)
-                    logger.info(f"第{index}段TTS合成成功。msg: {msg}")
-                    while index != self.tts_index:
-                        # 阻塞直到轮到这个音频播放
-                        continue
+                    logger.info(msg=f"第{index}段TTS合成成功。msg: {msg}")
                     with self.play_lock:
                         logger.info(f"即将播放第{index}段TTS。msg: {msg}")
                         self.player.play(
-                            voice,
-                            not cache,
+                            src=voice,
+                            delete=not cache,
                             onCompleted=lambda: self._lastCompleted(index, onCompleted),
+                            index=index,
                         )
-                        self.tts_index += 1
                     return voice
                 except Exception as e:
                     logger.error(f"语音合成失败：{e}", stack_info=True)
-                    self.tts_index += 1
                     traceback.print_exc()
                     return None
 
@@ -116,8 +132,12 @@ class Conversation(object):
             self.asr = ASR.get_engine_by_slug(config.get("asr_engine", "tencent-asr"))
             self.ai = AI.get_robot_by_slug(config.get("robot", "tuling"))
             self.tts = TTS.get_engine_by_slug(config.get("tts_engine", "baidu-tts"))
+            if self.DigitalHumanEnabled:
+                self.dh = DigitalHuman.get_engine_by_slug(
+                    config.get("dh_engine", "tencent-dh")
+                )
             self.nlu = NLU.get_engine_by_slug(config.get("nlu_engine", "unit"))
-            self.player = Player.SoxPlayer()
+            self.player = Player.OrderPlayer()
             self.brain = Brain(self)
             self.brain.printPlugins()
         except Exception as e:
@@ -157,30 +177,52 @@ class Conversation(object):
 
         lastImmersiveMode = self.immersiveMode
 
-        parsed = self.doParse(query)
-        if self._InGossip(query) or not self.brain.query(query, parsed):
-            # 进入闲聊
-            if self.nlu.hasIntent(parsed, "PAUSE") or "闭嘴" in query:
-                # 停止说话
-                self.player.stop()
-            else:
-                # 没命中技能，使用机器人回复
-                if self.ai.SLUG == "openai":
-                    stream = self.ai.stream_chat(query)
-                    self.stream_say(stream, True, onCompleted=self.checkRestore)
-                else:
-                    msg = self.ai.chat(query, parsed)
-                    self.say(msg, True, onCompleted=self.checkRestore)
+        # todo 先屏蔽NLU处理
+        # parsed = self.doParse(query)
+        # if self._InGossip(query) or not self.brain.query(query, parsed):
+        # else:
+        #     # 命中技能
+        #     if lastImmersiveMode and lastImmersiveMode != self.matchPlugin:
+        #         if self.player:
+        #             if self.player.is_playing():
+        #                 logger.debug("等说完再checkRestore")
+        #                 self.player.appendOnCompleted(lambda: self.checkRestore())
+        #         else:
+        #             logger.debug("checkRestore")
+        #             self.checkRestore()
+        parsed = {"Domain": "", "Intent": "", "Slot": query}
+        # 进入闲聊
+        if "闭嘴" in query or "暂停" in query:
+            # 停止说话
+            self.player.stop()
         else:
-            # 命中技能
-            if lastImmersiveMode and lastImmersiveMode != self.matchPlugin:
-                if self.player:
-                    if self.player.is_playing():
-                        logger.debug("等说完再checkRestore")
-                        self.player.appendOnCompleted(lambda: self.checkRestore())
-                else:
-                    logger.debug("checkRestore")
-                    self.checkRestore()
+            # 没命中技能，使用机器人回复
+            if self.ai.SLUG == "openai":
+                self.sender.send_message(
+                    action=ACTION_ROBOT_THINK,
+                    data=StatusData(stage=STAGE_SEARCH, status="start"),
+                    message="开始查找资料",
+                )
+                stream = self.ai.stream_chat(query)
+                self.sender.send_message(
+                    action=ACTION_ROBOT_THINK,
+                    data=StatusData(stage=STAGE_SEARCH, status="end"),
+                    message="查找资料结束",
+                )
+                self.stream_say(stream, True, onCompleted=self.checkRestore)
+            else:
+                self.sender.send_message(
+                    action=ACTION_ROBOT_THINK,
+                    data=StatusData(stage=STAGE_SEARCH, status="start"),
+                    message="开始查找资料",
+                )
+                msg = self.ai.chat(query, parsed)
+                self.sender.send_message(
+                    action=ACTION_ROBOT_THINK,
+                    data=StatusData(stage=STAGE_SEARCH, status="end"),
+                    message="查找资料结束",
+                )
+                self.say(msg, True, onCompleted=self.checkRestore)
 
     def doParse(self, query):
         args = {
@@ -274,6 +316,11 @@ class Conversation(object):
         else:
             self.say("没听清呢")
             self.hasPardon = False
+        self.sender.send_message(
+            action=ACTION_ROBOT_SPEAK,
+            data=StatusData(stage="", status="end"),
+            message="抱歉，刚刚没听清，能再说一遍吗？",
+        )
 
     def _tts_line(self, line, cache, index=0, onCompleted=None):
         """
@@ -300,6 +347,8 @@ class Conversation(object):
         :param lines: 字符串列表
         :param cache: 是否缓存 TTS 结果
         """
+        # 重置index
+        self.player.reset_index(0)
         audios = []
         pattern = r"http[s]?://.+"
         logger.info("_tts")
@@ -344,38 +393,62 @@ class Conversation(object):
         :param cache: 是否缓存 TTS 结果
         :param onCompleted: 声音播报完成后的回调
         """
-        lines = []
-        line = ""
-        resp_uuid = str(uuid.uuid1())
+        # 重置index
+        data_list = []
+        left = ""
         audios = []
-        if onCompleted is None:
-            onCompleted = lambda: self._onCompleted(msg)
-        self.tts_index = 0
-        self.tts_count = 0
         index = 0
         skip_tts = False
+        skip_prefix = None
+        resp_uuid = str(uuid.uuid1())
+        reqId = str(object=uuid.uuid4()).replace("-", "")
+        self.tts_count = 0
+        self.player.reset_index(0)
+        if onCompleted is None:
+            onCompleted = lambda: self._onCompleted(msg)
         for data in stream():
+            logger.info(f"stream data: {data}")
+            data_list.append(data)
             if self.onStream:
+                logger.info(f"stream_say onStream:{data}{resp_uuid}")
                 self.onStream(data, resp_uuid)
-            line += data
-            if any(char in data for char in utils.getPunctuations()):
-                if "```" in line.strip():
-                    skip_tts = True
-                if not skip_tts:
-                    audio = self._tts_line(line.strip(), cache, index, onCompleted)
-                    if audio:
-                        self.tts_count += 1
-                        audios.append(audio)
-                        index += 1
-                else:
-                    logger.info(f"{line} 属于代码段，跳过朗读")
-                lines.append(line)
-                line = ""
-        if line.strip():
-            lines.append(line)
-        if skip_tts:
-            self._tts_line("内容包含代码，我就不念了", True, index, onCompleted)
-        msg = "".join(lines)
+            lines, left, skip, skip_prefix = self.split_tts(
+                text=left + data, skip_prefix=skip_prefix
+            )
+            skip_tts = skip_tts or skip
+            # 无需分割
+            if not lines:
+                continue
+            for line in lines:
+                # 没有内容就跳过
+                if not line or not line.strip():
+                    continue
+                index, audio = self._play_line(
+                    reqId=reqId,
+                    line=line,
+                    index=index,
+                    cache=cache,
+                    onCompleted=onCompleted,
+                )
+                if audio:
+                    audios.append(audio)
+        # 播放剩余的内容
+        if left.strip():
+            data_list.append(left)
+            index, audio = self._play_line(
+                reqId=reqId,
+                line=left,
+                index=index,
+                cache=cache,
+                onCompleted=onCompleted,
+            )
+            if audio:
+                audios.append(audio)
+        if self.DigitalHumanEnabled:
+            self.dh.CommandChannel(reqId, "", index + 1, True)
+        # if skip_tts:
+        #     self._tts_line(line="内容中包含代码，我就不念了", cache=True, index=index, onCompleted=onCompleted)
+        msg = "".join(data_list)
         self.appendHistory(1, msg, UUID=resp_uuid, plugin="")
         self._after_play(msg, audios, "")
 
@@ -388,22 +461,25 @@ class Conversation(object):
         :param onCompleted: 完成的回调
         :param append_history: 是否要追加到聊天记录
         """
-        if append_history:
-            self.appendHistory(1, msg, plugin=plugin)
-        msg = utils.stripPunctuation(msg).strip()
+        if self.DigitalHumanEnabled:
+            reqId = str(uuid.uuid4()).replace("-", "")
+            self.dh.CommandChannel(reqId, msg, 1, True)
+        else:
+            if append_history:
+                self.appendHistory(1, msg, plugin=plugin)
+            msg = utils.strip_punctuation(msg).strip()
 
-        if not msg:
-            return
+            if not msg:
+                return
 
-        logger.info(f"即将朗读语音：{msg}")
-        lines = re.split("。|！|？|\!|\?|\n", msg)
-        if onCompleted is None:
-            onCompleted = lambda: self._onCompleted(msg)
-        self.tts_index = 0
-        self.tts_count = len(lines)
-        logger.debug(f"tts_count: {self.tts_count}")
-        audios = self._tts(lines, cache, onCompleted)
-        self._after_play(msg, audios, plugin)
+            logger.info(f"即将朗读语音：{msg}")
+            lines = re.split("。|！|？|\!|\?|\n", msg)
+            if onCompleted is None:
+                onCompleted = lambda: self._onCompleted(msg)
+            self.tts_count = len(lines)
+            logger.debug(f"tts_count: {self.tts_count}")
+            audios = self._tts(lines, cache, onCompleted)
+            self._after_play(msg, audios, plugin)
 
     def activeListen(self, silent=False):
         """
@@ -417,8 +493,9 @@ class Conversation(object):
             self.player.join()  # 确保所有音频都播完
         logger.info("进入主动聆听...")
         try:
-            if not silent:
-                self.lifeCycleHandler.onWakeup()
+            # 重复wakeup
+            # if not silent:
+            #     self.lifeCycleHandler.onWakeup()
             listener = snowboydecoder.ActiveListener(
                 [constants.getHotwordModel(config.get("hotword", "wukong.pmdl"))]
             )
@@ -429,11 +506,26 @@ class Conversation(object):
             if not silent:
                 self.lifeCycleHandler.onThink()
             if voice:
+                self.sender.send_message(
+                    action=ACTION_ROBOT_THINK,
+                    data=StatusData(stage=STAGE_UNDERSTAND, status="start"),
+                    message="开始理解您的内容",
+                )
                 query = self.asr.transcribe(voice)
+                self.sender.send_message(
+                    action=ACTION_USER_SPEAK,
+                    data=StatusData(stage=STAGE_UNDERSTAND, status="end"),
+                    message=query,
+                )
                 utils.check_and_delete(voice)
                 return query
             return ""
         except Exception as e:
+            self.sender.send_message(
+                action=ACTION_ROBOT_SPEAK,
+                data=StatusData(stage="", status="end"),
+                message="抱歉, 遇到些问题，能再说一遍吗？",
+            )
             logger.error(f"主动聆听失败：{e}", stack_info=True)
             traceback.print_exc()
             return ""
@@ -444,3 +536,74 @@ class Conversation(object):
             self.interrupt()
         self.player = Player.SoxPlayer()
         self.player.play(src, delete=delete, onCompleted=onCompleted)
+
+    def _play_line(self, reqId, line, index, cache, onCompleted) -> Tuple[int, str]:
+        audio = ""
+        if self.DigitalHumanEnabled:
+            self.dh.CommandChannel(reqId, line, index + 1, False)
+            self.tts_count += 1
+            index += 1
+        else:
+            audio = self._tts_line(
+                line=line, cache=cache, index=index, onCompleted=onCompleted
+            )
+            if audio:
+                self.tts_count += 1
+                index += 1
+        return index, audio
+
+    @classmethod
+    def split_tts(
+        cls, text: str, skip_prefix: str = None
+    ) -> Tuple[list, str, bool, str]:
+        """
+        返回: (分割列表, 分割后剩下内容, 是否跳过tts, 跳过的起始关键字)
+        """
+        left = ""
+        lines = []
+        # 先剔除非TTS字符
+        skip, text, prefix, prefix_str = cls.skip_tts(text=text, prefix=skip_prefix)
+        # 按标点分割
+        if text and text.strip():
+            lines = utils.split_paragraph(text=text, token_min_n=4)
+            if lines and not utils.end_punctuation(lines[-1]):
+                left = lines.pop(-1)
+        return (
+            lines,
+            left + prefix_str,
+            skip,
+            prefix,
+        )
+
+    @classmethod
+    def skip_tts(cls, text: str, prefix: str = None) -> Tuple[bool, str, str, str]:
+        """
+        返回: 是否有忽略, 剩下内容, 起始关键字, 起始关键字的内容
+        """
+        skip = False
+        # prefix not None, 匹配结尾
+        if prefix:
+            suffix = re_tts["part"].get(prefix, prefix)
+            idx = text.find(suffix)
+            if idx > -1:
+                skip = True
+                text = text[idx + len(suffix) :]
+            logger.debug("cut suffix: %s", text)
+        # 去掉全匹配
+        for rec in re_tts["full"]:
+            skip = skip or (rec.match(text) is not None)
+            text = rec.sub(repl="", string=text)
+        logger.debug("cut full: %s", text)
+        # 匹配开头
+        prefix = ""
+        prefix_str = ""
+        for pre in re_tts["part"].keys():
+            idx = text.find(pre)
+            if idx > -1:
+                skip = True
+                prefix = pre
+                prefix_str = text[idx:]
+                text = text[:idx]
+                break
+        logger.debug("find prefix: %s", prefix)
+        return skip, text, prefix, prefix_str

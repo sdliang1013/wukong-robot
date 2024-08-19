@@ -7,6 +7,7 @@ import signal
 import hashlib
 import urllib3
 
+from robot.Sender import WebSocketSender
 from robot.Updater import Updater
 from robot.Conversation import Conversation
 from robot.LifeCycleHandler import LifeCycleHandler
@@ -34,10 +35,7 @@ class Wukong(object):
         print(
             """
 ********************************************************
-*          wukong-robot - 中文语音对话机器人           *
-*          (c) 2019 潘伟洲 <m@hahack.com>              *
-*               当前版本号:  {}                      *
-*     https://github.com/wzpan/wukong-robot.git        *
+*          sdl-robot - 中文语音对话机器人           *
 ********************************************************
 
             后台管理端：http://{}:{}
@@ -51,10 +49,14 @@ class Wukong(object):
                 config.get("/server/port", "5001"),
             )
         )
-
-        self.conversation = Conversation(self._profiling)
-        self.conversation.say(f"{config.get('first_name', '主人')} 你好！试试对我喊唤醒词叫醒我吧", True)
-        self.lifeCycleHandler = LifeCycleHandler(self.conversation)
+        self.sender = WebSocketSender()
+        self.conversation = Conversation(profiling=self._profiling, sender=self.sender)
+        self.conversation.say(
+            f"{config.get('first_name', '主人')} 你好！试试对我喊唤醒词叫醒我吧", True
+        )
+        self.lifeCycleHandler = LifeCycleHandler(
+            conversation=self.conversation, sender=self.sender
+        )
         self.lifeCycleHandler.onInit()
 
     def _signal_handler(self, signal, frame):
@@ -93,8 +95,8 @@ class Wukong(object):
         try:
             # 初始化离线唤醒
             detector.initDetector(self)
-        except AttributeError:
-            logger.error("初始化离线唤醒功能失败", stack_info=True)
+        except AttributeError as e:
+            logger.exception("初始化离线唤醒功能失败")
             pass
 
     def help(self):
@@ -103,7 +105,7 @@ class Wukong(object):
     python3 wukong.py [命令]
     可选命令：
       md5                      - 用于计算字符串的 md5 值，常用于密码设置
-      update                   - 手动更新 wukong-robot
+      update                   - 手动更新 sdl-robot
       upload [thredNum]        - 手动上传 QA 集语料，重建 solr 索引。
                                  threadNum 表示上传时开启的线程数（可选。默认值为 10）
       profiling                - 运行过程中打印耗时数据
@@ -119,14 +121,14 @@ class Wukong(object):
 
     def update(self):
         """
-        更新 wukong-robot
+        更新 sdl-robot
         """
         updater = Updater()
         return updater.update()
 
     def fetch(self):
         """
-        检测 wukong-robot 的更新
+        检测 sdl-robot 的更新
         """
         updater = Updater()
         updater.fetch()
@@ -155,7 +157,7 @@ class Wukong(object):
 
     def restart(self):
         """
-        重启 wukong-robot
+        重启 sdl-robot
         """
         logger.critical("程序重启...")
         try:

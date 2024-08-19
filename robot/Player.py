@@ -7,11 +7,9 @@ import queue
 import signal
 import threading
 
-from robot import logging
+from robot import logging, utils
 from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
 from contextlib import contextmanager
-
-from . import utils
 
 logger = logging.getLogger(__name__)
 
@@ -300,3 +298,79 @@ class MusicPlayer(SoxPlayer):
         else:
             self.plugin.say("当前系统不支持调节音量")
         self.resume()
+
+
+class OrderPlayer(SoxPlayer):
+    SLUG = "OrderPlayer"
+
+    def __init__(self, **kwargs):
+        self.play_index = -1  # 当前播放
+        self.delay_list = []  # 延迟列表
+        super(OrderPlayer, self).__init__(**kwargs)
+
+    def playLoop(self):
+        while True:
+            try:
+                (src, onCompleted, idx) = self.play_queue.get()
+                # idx > self.play_index 加入延迟队列
+                if self.play_index >= 0 and idx > self.play_index:
+                    self._append_deplay(src=src, onCompleted=onCompleted, idx=idx)
+                    continue
+                if not src:
+                    continue
+                # 播放
+                self._play(src=src, onCompleted=onCompleted, idx=idx)
+                # 播放延迟队列
+                self.play_delay_list()
+            except Exception as e:
+                logger.critical(f"player error: {str(e)}", stack_info=True)
+                self.stop()
+
+    def play(self, src, delete=False, onCompleted=None, index=-1):
+        if src and (os.path.exists(src) or src.startswith("http")):
+            self.delete = delete
+            self.play_queue.put((src, onCompleted, index))
+        else:
+            logger.critical(f"path not exists: {src}", stack_info=True)
+
+    def reset_index(self, index: int, clear_delay: bool = True):
+        self.play_index = index
+        if clear_delay:
+            self.delay_list.clear()
+
+    def play_delay_list(self):
+        if not self.delay_list:
+            return
+        for item in self.delay_list:
+            if not item:
+                continue
+            (src, onCompleted, idx) = item
+            # 中断
+            if idx > self.play_index:
+                break
+            self._play(src=src, onCompleted=onCompleted, idx=idx)
+            # 设置空
+            self.delay_list[idx] = None
+
+    def stop(self):
+        self.play_index = -1
+        self.delay_list.clear()
+        super().stop()
+
+    def _append_deplay(self, src, onCompleted, idx):
+        ext = idx + 1 - len(self.delay_list)
+        if ext > 0:
+            self.delay_list.extend([None] * ext)
+        self.delay_list[idx] = (src, onCompleted, idx)
+
+    def _play(self, src, onCompleted, idx):
+        with self.play_lock:
+            logger.info(msg=f"开始播放音频：{src}")
+            self.src = src
+            res = self.doPlay(src)
+            self.play_queue.task_done()
+            # 将 onCompleted() 方法的调用放到事件循环的线程中执行
+            self.loop.call_soon_threadsafe(self.executeOnCompleted, res, onCompleted)
+            # 更新下标
+            if idx >= 0:
+                self.play_index = idx + 1

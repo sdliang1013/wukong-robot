@@ -513,7 +513,7 @@ class DHApiHandler(BaseHandler):
             self.create_cmd()
 
     def get_session_list(self):
-        func = self.get_func("ListSessionOfProjectId")
+        func = self.get_func("list_session")
         if func:
             self.write_data(data=func())
 
@@ -523,22 +523,22 @@ class DHApiHandler(BaseHandler):
             self.write_data(data=func())
 
     def create_session(self):
-        func = self.get_func("CreateSession")
+        func = self.get_func("create_session")
         if func:
             self.write_data(data=func())
 
     def open_session(self):
-        func = self.get_func("StartSession")
+        func = self.get_func("start_session")
         if func:
             self.write_data(data=func())
 
     def close_session(self):
-        func = self.get_func("closeAllSession")
+        func = self.get_func("close_all_session")
         if func:
             self.write_data(data=func())
 
     def create_cmd(self):
-        func = self.get_func("CreateCmdChannel")
+        func = self.get_func("create_cmd_channel")
         if func:
             self.write_data(data=func())
 

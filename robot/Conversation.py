@@ -57,7 +57,7 @@ class Conversation(object):
 
     def __init__(self, profiling=False, sender=None):
         self.brain, self.asr, self.ai, self.tts, self.nlu = None, None, None, None, None
-        self.DigitalHumanEnabled = False
+        self.DigitalHumanEnabled = config.get("dh_engine_enable", False)
         self.dh = None
         self.reInit()
         self.scheduler = Scheduler(self)
@@ -401,7 +401,7 @@ class Conversation(object):
         skip_tts = False
         skip_prefix = None
         resp_uuid = str(uuid.uuid1())
-        reqId = str(object=uuid.uuid4()).replace("-", "")
+        reqId = uuid.uuid4().hex
         self.tts_count = 0
         self.player.reset_index(0)
         if onCompleted is None:
@@ -444,8 +444,8 @@ class Conversation(object):
             )
             if audio:
                 audios.append(audio)
-        if self.DigitalHumanEnabled:
-            self.dh.CommandChannel(reqId, "", index + 1, True)
+        if self.dh:
+            self.dh.send_command(reqId, "", index + 1, True)
         # if skip_tts:
         #     self._tts_line(line="内容中包含代码，我就不念了", cache=True, index=index, onCompleted=onCompleted)
         msg = "".join(data_list)
@@ -461,9 +461,8 @@ class Conversation(object):
         :param onCompleted: 完成的回调
         :param append_history: 是否要追加到聊天记录
         """
-        if self.DigitalHumanEnabled:
-            reqId = str(uuid.uuid4()).replace("-", "")
-            self.dh.CommandChannel(reqId, msg, 1, True)
+        if self.dh:
+            self.dh.send_command(uuid.uuid4().hex, msg, 1, True)
         else:
             if append_history:
                 self.appendHistory(1, msg, plugin=plugin)
@@ -539,8 +538,8 @@ class Conversation(object):
 
     def _play_line(self, reqId, line, index, cache, onCompleted) -> Tuple[int, str]:
         audio = ""
-        if self.DigitalHumanEnabled:
-            self.dh.CommandChannel(reqId, line, index + 1, False)
+        if self.dh:
+            self.dh.send_command(reqId, line, index + 1, False)
             self.tts_count += 1
             index += 1
         else:

@@ -12,6 +12,7 @@ from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+_player_ = None
 
 
 def py_error_handler(filename, line, function, err, fmt):
@@ -32,7 +33,6 @@ def no_alsa_error():
         asound.snd_lib_error_set_handler(None)
     except:
         yield
-        pass
 
 
 def play(fname, onCompleted=None):
@@ -41,9 +41,12 @@ def play(fname, onCompleted=None):
 
 
 def getPlayerByFileName(fname):
+    global _player_
     foo, ext = os.path.splitext(fname)
     if ext in [".mp3", ".wav"]:
-        return SoxPlayer()
+        if not _player_ or not _player_.is_alive():
+            _player_ = SoxPlayer()
+        return _player_
 
 
 class AbstractPlayer(object):
@@ -159,6 +162,9 @@ class SoxPlayer(AbstractPlayer):
     def _clear_queue(self):
         with self.play_queue.mutex:
             self.play_queue.queue.clear()
+
+    def is_alive(self):
+        return self.consumer_thread.is_alive() and self.thread_loop.is_alive()
 
 
 class MusicPlayer(SoxPlayer):

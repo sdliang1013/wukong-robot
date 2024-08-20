@@ -8,9 +8,30 @@ from urllib.parse import quote
 import requests
 import uuid
 import websocket
-from robot import config, logging
+from robot import config, logging, scheds
 import threading
 import json
+import random
+
+
+# 通用播报：
+# 2hands_forward1
+# left_side1
+# right_side1
+
+# 入退场：
+# waving_hand
+
+# 指引播报：
+# emphasize
+# left_up1
+# right_up1
+
+# 情绪反应：
+# compliment_state
+# support
+# action_type = ["2hands_forward1", "left_side1", "right_side1", "waving_hand", "emphasize", "left_up1", "right_up1", "compliment_state", "support"]
+action_type = ["2hands_forward1", "left_side1", "right_side1", "left_up1", "right_up1"]
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +58,7 @@ class AbstractDigitalHuman(object):
         return instance
 
     @abstractmethod
-    def CommandChannel(self, reqId, text, seq, ifFinal):
+    def send_command(self, reqId, text, seq, ifFinal):
         pass
 
 
@@ -51,7 +72,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
     def __init__(
         self, base_url, wss_url, access_token, app_key, project_id, user_id, **args
     ):
-        super(self.__class__, self).__init__()
+        super(TecentDigitalHuman, self).__init__()
         self.base_url = base_url
         self.wss_url = wss_url
         self.access_token = access_token
@@ -64,7 +85,8 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         self.session_started = False  # 会话是否开启
         self.play_stream_addr = None
         self.ws_cmd = None
-        self.thread_loop = None
+        self.thread_ws_cmd = None  # 指令长连接线程
+        self.sche_heart = scheds.DeferredScheduler()  # 心跳任务
 
         # 准备就绪
         self.be_ready()
@@ -74,7 +96,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         # Try to get ali_yuyin config from config
         return config.get("tencent-dh", {})
 
-    def CreateSession(self):
+    def create_session(self):
         """
         1. 新建直播流会话
         """
@@ -94,13 +116,13 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         }
         try:
             response = self.http_req.post(
-                url=self.GenReqURL(url, params),
+                url=self.gen_req_url(url, params),
                 #  headers=header,
                 json=data,
             )
             if response.status_code == 200:
                 responseData = response.json()
-                logger.info(f"CreateSession: {responseData}")
+                logger.info(f"create_session: {responseData}")
                 code = responseData["Header"]["Code"]
                 if code == 0:
                     self.session_id = responseData["Payload"]["SessionId"]
@@ -109,17 +131,17 @@ class TecentDigitalHuman(AbstractDigitalHuman):
                 else:
                     logger.critical(f"新建直播流会话失败，response: {responseData}")
                 logger.info(
-                    f"SessionStatus: {responseData['Payload']['SessionStatus']}, "
-                    f"PlayStreamAddr: {responseData['Payload']['PlayStreamAddr']}"
+                    f"SessionStatus: {self.session_status}, "
+                    f"PlayStreamAddr: {self.play_stream_addr}"
                 )
                 return responseData
             else:
                 logger.critical(f"{self.SLUG} 新建直播流会话出错了: {response.text}")
                 return response.text
         except Exception as e:
-            logger.critical("新建直播流会话失败，原因：{e}", exc_info=True)
+            logger.critical(f"新建直播流会话失败，原因：{str(e)}", exc_info=True)
 
-    def ListSessionOfProjectId(self):
+    def list_session(self):
         """
         2. 查询数智人项目下的会话列表
         """
@@ -127,10 +149,10 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         params = {"appkey": self.app_key, "timestamp": int(time.time())}
         data = {"Payload": {"ReqId": GenUUID(), "VirtualmanProjectId": self.project_id}}
         try:
-            response = self.http_req.post(url=self.GenReqURL(url, params), json=data)
+            response = self.http_req.post(url=self.gen_req_url(url, params), json=data)
             if response.status_code == 200:
                 responseData = response.json()
-                logger.info(f"ListSessionOfProjectId: {responseData}")
+                logger.info(f"list_session: {responseData}")
                 code = responseData["Header"]["Code"]
                 if code != 0:
                     logger.critical(
@@ -143,7 +165,9 @@ class TecentDigitalHuman(AbstractDigitalHuman):
                 )
                 return response.text
         except Exception as e:
-            logger.critical("查询数智人项目下的会话列表失败，原因：{e}", exc_info=True)
+            logger.critical(
+                f"查询数智人项目下的会话列表失败，原因：{str(e)}", exc_info=True
+            )
 
     def get_session_status(self, session_id=None):
         """
@@ -155,7 +179,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
             "Payload": {"ReqId": GenUUID(), "SessionId": session_id or self.session_id}
         }
         try:
-            response = self.http_req.post(url=self.GenReqURL(url, params), json=data)
+            response = self.http_req.post(url=self.gen_req_url(url, params), json=data)
             if response.status_code == 200:
                 responseData = response.json()
                 logger.info(f"SessionStatus: {responseData}")
@@ -173,9 +197,9 @@ class TecentDigitalHuman(AbstractDigitalHuman):
                 )
                 return response.text
         except Exception as e:
-            logger.critical("查询数智人会话状态失败，原因：{e}", exc_info=True)
+            logger.critical(f"查询数智人会话状态失败，原因：{str(e)}", exc_info=True)
 
-    def StartSession(self):
+    def start_session(self):
         """
         3. 开启会话
         """
@@ -183,10 +207,10 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         params = {"appkey": self.app_key, "timestamp": int(time.time())}
         data = {"Payload": {"ReqId": GenUUID(), "SessionId": self.session_id}}
         try:
-            response = self.http_req.post(url=self.GenReqURL(url, params), json=data)
+            response = self.http_req.post(url=self.gen_req_url(url, params), json=data)
             if response.status_code == 200:
                 responseData = response.json()
-                logger.info(f"StartSession: {responseData}")
+                logger.info(f"start_session: {responseData}")
                 code = responseData["Header"]["Code"]
                 self.session_started = code == 0
                 if code != 0:
@@ -196,9 +220,9 @@ class TecentDigitalHuman(AbstractDigitalHuman):
                 logger.critical(f"{self.SLUG} 开启会话失败出错了: {response.text}")
                 return response.text
         except Exception as e:
-            logger.critical("开启会话失败，原因：{e}", exc_info=True)
+            logger.critical(f"开启会话失败，原因：{str(e)}", exc_info=True)
 
-    def CloseSession(self, session_id=None):
+    def close_session(self, session_id=None):
         """
         4. 关闭会话
         """
@@ -208,10 +232,10 @@ class TecentDigitalHuman(AbstractDigitalHuman):
             "Payload": {"ReqId": GenUUID(), "SessionId": session_id or self.session_id}
         }
         try:
-            response = self.http_req.post(url=self.GenReqURL(url, params), json=data)
+            response = self.http_req.post(url=self.gen_req_url(url, params), json=data)
             if response.status_code == 200:
                 responseData = response.json()
-                logger.info(f"CloseSession: {responseData}")
+                logger.info(f"close_session: {responseData}")
                 code = responseData["Header"]["Code"]
                 if code == 0:
                     self.session_id = None
@@ -224,49 +248,73 @@ class TecentDigitalHuman(AbstractDigitalHuman):
                 logger.critical(f"{self.SLUG} 关闭会话失败出错了: {response.text}")
                 return response.text
         except Exception as e:
-            logger.critical("关闭会话失败，原因：{e}", exc_info=True)
+            logger.critical(f"关闭会话失败，原因：{str(e)}", exc_info=True)
 
-    def CreateCmdChannel(self):
+    def create_cmd_channel(self):
         """
         5. 创建长链接通道(流式)
         """
+        params = {
+            "appkey": self.app_key,
+            "timestamp": int(time.time()),
+            "requestid": self.session_id,
+        }
+        self.ws_cmd = websocket.WebSocketApp(
+            url=self.gen_req_url(self.wss_url, params),
+            on_open=self.on_cmd_open,
+            on_message=self.on_cmd_message,
+            on_error=self.on_cmd_error,
+            on_close=self.on_cmd_close,
+        )
+        # 启动长连接
+        self.thread_ws_cmd = threading.Thread(target=self.ws_cmd.run_forever)
+        self.thread_ws_cmd.start()
 
-        def cmd_run():
-            params = {
-                "appkey": self.app_key,
-                "timestamp": int(time.time()),
-                "requestid": self.session_id,
-            }
-            self.ws_cmd = websocket.WebSocketApp(
-                url=self.GenReqURL(self.wss_url, params),
-                on_message=on_message,
-                on_error=on_error,
-                on_close=on_close,
-            )
-            self.ws_cmd.on_open = on_open
-            self.ws_cmd.run_forever()
-
-        self.thread_loop = threading.Thread(target=cmd_run)
-        self.thread_loop.start()
-
-    def CommandChannel(self, reqId, text, seq, isFinal):
+    def send_command(self, reqId, text, seq, isFinal):
         try:
+            action = f'<insert-action type="{random.choice(action_type)}"/> '
             data = {
                 "Payload": {
                     "ReqId": reqId,
                     "SessionId": self.session_id,
                     "Command": "SEND_STREAMTEXT",
-                    "Data": {"Text": text, "Seq": seq, "IsFinal": isFinal},
+                    "Data": {
+                        "Text": action + text,
+                        "Seq": seq,
+                        "IsFinal": isFinal,
+                        # "SmartActionEnabled": True 此参数只对 3D 数字人有效
+                    },
                 }
             }
-            logger.info(f"CommandChannel: {text}")
-            self.ws_cmd.send(json.dumps(data))
+            logger.info(f"send_command: {text}")
+            if self.ws_cmd:
+                self.ws_cmd.send(json.dumps(data))
+            else:
+                logger.error("直播流会话未准备好.")
         except Exception as e:
-            logger.critical(f"发送命令失败，原因：{e}", exc_info=True)
+            logger.critical(f"发送命令失败，原因：{str(e)}", exc_info=True)
 
         # 用户可以在函数内部生成时间戳, 只需要传入appkey和accessToken即可获取访问接口所需的公共参数和签名
 
-    def GenSignature(self, signing_content):
+    def cmd_ping(self):
+        try:
+            data = {
+                "Payload": {
+                    "ReqId": GenUUID(),
+                    "SessionId": self.session_id,
+                    "Command": "SEND_HEARTBEAT",
+                    "Data": {"Text": "PING"},
+                }
+            }
+            logger.info("cmd_ping: PING")
+            if self.ws_cmd:
+                self.ws_cmd.send(json.dumps(data))
+            else:
+                logger.error("直播流会话未准备好.")
+        except Exception as e:
+            logger.critical(f"发送心态命令失败，原因：{str(e)}", exc_info=True)
+
+    def gen_sign(self, signing_content):
         # 计算 HMAC-SHA256 值
         h = hmac.new(
             self.access_token.encode(), signing_content.encode(), hashlib.sha256
@@ -279,31 +327,43 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         signature = f"&signature={encode_sign}"
         return signature
 
-    def GenReqURL(self, base_url, parameter):
+    def gen_req_url(self, base_url, parameter):
         # 按字典序拼接待计算签名的字符串
         signing_content = "&".join(
             f"{k}={parameter[k]}" for k in sorted(parameter.keys())
         )
         # 计算签名
-        signature = self.GenSignature(signing_content)
+        signature = self.gen_sign(signing_content)
         # 拼接访问接口的完整 URL
         return f"{base_url}?{signing_content}{signature}"
 
-    def closeAllSession(self):
-        for session in self.ListSessionOfProjectId():
-            self.CloseSession(session["SessionId"])
+    def close_all_session(self):
+        for session in self.list_session():
+            self.close_session(session["SessionId"])
+
+    def query_session_info(self):
+        if self.session_id:
+            return self.session_id
+        for session in self.list_session():
+            self.session_id = session["SessionId"]
+            self.session_status = session["SessionStatus"]
+            self.play_stream_addr = session["PlayStreamAddr"]
+            self.session_started = session["IsSessionStarted"]
+            break
+        return self.session_id
 
     def get_cmd_status(self):
         """获取指令长连接状态"""
         return self.ws_cmd and self.ws_cmd.keep_running
 
     def be_ready(self):
-        # 先关闭所有的会话
-        self.closeAllSession()
+        # 先查询状态
+        self.query_session_info()
 
         # 创建直播流
-        time.sleep(1)
-        self.CreateSession()
+        if not self.session_id or self.session_status in [2, 4]:
+            time.sleep(1)
+            self.create_session()
         if not self.session_id:
             return
 
@@ -314,7 +374,8 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         if self.session_status != 1:
             logger.critical(f"直播流状态错误: {self.session_status}")
             return
-        self.StartSession()
+        if not self.session_started:
+            self.start_session()
 
         # 会话创建后, 才能创建指令通道
         time.sleep(1)
@@ -323,7 +384,16 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         if not self.session_started:
             logger.critical("直播会话未开启.")
             return
-        self.CreateCmdChannel()
+        self.create_cmd_channel()
+        # 启动心跳
+        self.sche_heart.add_job(
+            job_id=GenUUID(),
+            func=self.cmd_ping,
+            name="CmdHeartBeat",
+            trigger="interval",
+            seconds=120,
+        )
+        self.sche_heart.start()
         time.sleep(3)
 
     def wait_for(self, condition, wait_once: int, limit: int = 10):
@@ -332,6 +402,19 @@ class TecentDigitalHuman(AbstractDigitalHuman):
             self.get_session_status()
             time.sleep(wait_once)
             count += 1
+
+    def on_cmd_message(self, ws, message):
+        logger.info(f"DigitalHuman WebSocket Received message: {message}")
+
+    def on_cmd_error(self, ws, error):
+        logger.error(f"DigitalHuman WebSocket Error: {error}")
+
+    def on_cmd_close(self, ws, _foo, _bar):
+        logger.info("DigitalHuman WebSocket Connection closed")
+        # self.be_ready()
+
+    def on_cmd_open(self, ws):
+        logger.info("DigitalHuman WebSocket Connection opened")
 
 
 def GenUUID():
@@ -380,21 +463,3 @@ def get_engines():
         for engine in list(get_subclasses(AbstractDigitalHuman))
         if hasattr(engine, "SLUG") and engine.SLUG
     ]
-
-
-def on_message(ws, message):
-    logger.info(f"DigitalHuman WebSocket Received message: {message}")
-
-
-def on_error(ws, error):
-    logger.error(f"DigitalHuman WebSocket Error: {error}")
-
-
-def on_close(ws, _foo, _bar):
-    logger.info("DigitalHuman WebSocket Connection closed")
-    ws.run_forever()
-    logger.info("DigitalHuman WebSocket Connection reopened")
-
-
-def on_open(ws):
-    logger.info("DigitalHuman WebSocket Connection opened")

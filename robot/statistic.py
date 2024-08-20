@@ -22,7 +22,7 @@ class ReportThread(threading.Thread):
         self.t = t
 
     def run(self):
-        to_report = config.get("statistic", True)
+        to_report = config.get("statistic", False)
         if to_report:
             try:
                 persona = config.get("robot_name_cn", "孙悟空")

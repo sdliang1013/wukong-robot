@@ -5,7 +5,7 @@ import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from robot import logging, utils, constants
+from robot import logging, utils
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +123,11 @@ class Scheduler(object):
             remind_time=remind_time,
             original_time=original_time,
             content=content,
-            describe=f"时间：{remind_time}，事项：{content}"
-            if "repeat" not in remind_time
-            else f"时间：{original_time}, 事项：{content}",
+            describe=(
+                f"时间：{remind_time}，事项：{content}"
+                if "repeat" not in remind_time
+                else f"时间：{original_time}, 事项：{content}"
+            ),
             job_id=job_id,
         )
         success = False

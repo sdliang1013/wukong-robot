@@ -8,6 +8,7 @@ from robot import logging
 logger = logging.getLogger(__name__)
 TOKEN_PATH = os.path.expanduser("~/.wukong/.baiduSpeech_token")
 
+
 # 百度语音识别 REST_API极速版
 class baiduSpeech(object):
     def __init__(self, api_key, secret_key, dev_pid):
@@ -32,7 +33,7 @@ class baiduSpeech(object):
             )
             s = req.content.decode("utf-8", "ignore")
             result = json.loads(s)
-            if "access_token" in result.keys() and "scope" in result.keys():
+            if "access_token" in result and "scope" in result:
                 if not "brain_enhanced_asr" in result["scope"].split(" "):
                     logger.error("当前百度云api_id尚未有语音识别的授权。")
                 #### 请求access_token成功.

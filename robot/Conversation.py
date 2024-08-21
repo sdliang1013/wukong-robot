@@ -20,7 +20,6 @@ from robot.Scheduler import Scheduler
 from robot.sdk import History
 from robot.Sender import (
     StatusData,
-    ACTION_ROBOT_LISTEN,
     ACTION_USER_SPEAK,
     ACTION_ROBOT_THINK,
     STAGE_UNDERSTAND,
@@ -43,10 +42,11 @@ from robot import (
 
 re_tts = {
     "full": [
-        re.compile(r"```.+```"),
+        re.compile(pattern=r"```.+```"),
         re.compile(pattern=r"!\[[^\]]*\]\([^\)]*\)"),
     ],
-    "part": {r"```": r"```", r"![": r")"},
+    "pair": {r"```": r"```", r"![": r")"},
+    "char": ["**"],
 }
 
 
@@ -57,23 +57,23 @@ class Conversation(object):
 
     def __init__(self, profiling=False, sender=None):
         self.brain, self.asr, self.ai, self.tts, self.nlu = None, None, None, None, None
-        self.DigitalHumanEnabled = config.get("dh_engine_enable", False)
+        self.dh_enabled = config.get("/dh_engine/enable", False)
         self.dh = None
         self.reInit()
         self.scheduler = Scheduler(self)
         # 历史会话消息
         self.history = History.History()
         # 沉浸模式，处于这个模式下，被打断后将自动恢复这个技能
-        self.matchPlugin = None
-        self.immersiveMode = None
-        self.isRecording = False
+        self.match_plugin = None
+        self.immersive_mode = None
+        self.is_recording = False
         self.profiling = profiling
-        self.onSay = None
-        self.onStream = None
-        self.hasPardon = False
+        self.on_say = None
+        self.on_stream = None
+        self.has_pardon = False
         self.player = Player.OrderPlayer()
         self.sender = sender
-        self.lifeCycleHandler = LifeCycleHandler(self, sender=sender)
+        self.life_cycle_handler = LifeCycleHandler(self, sender=sender)
         self.tts_count = 0
         self.tts_index = 0
         self.tts_lock = threading.Lock()
@@ -123,8 +123,10 @@ class Conversation(object):
     def interrupt(self):
         if self.player and self.player.is_playing():
             self.player.stop()
-        if self.immersiveMode:
+        if self.immersive_mode:
             self.brain.pause()
+        if self.dh:
+            self.dh.interrupt()
 
     def reInit(self):
         """重新初始化"""
@@ -132,9 +134,9 @@ class Conversation(object):
             self.asr = ASR.get_engine_by_slug(config.get("asr_engine", "tencent-asr"))
             self.ai = AI.get_robot_by_slug(config.get("robot", "tuling"))
             self.tts = TTS.get_engine_by_slug(config.get("tts_engine", "baidu-tts"))
-            if self.DigitalHumanEnabled:
+            if self.dh_enabled:
                 self.dh = DigitalHuman.get_engine_by_slug(
-                    config.get("dh_engine", "tencent-dh")
+                    config.get("/dh_engine/provider", "tencent-dh")
                 )
             self.nlu = NLU.get_engine_by_slug(config.get("nlu_engine", "unit"))
             self.player = Player.OrderPlayer()
@@ -144,13 +146,13 @@ class Conversation(object):
             logger.critical(f"对话初始化失败：{e}", stack_info=True)
 
     def checkRestore(self):
-        if self.immersiveMode:
+        if self.immersive_mode:
             logger.info("处于沉浸模式，恢复技能")
-            self.lifeCycleHandler.onRestore()
+            self.life_cycle_handler.onRestore()
             self.brain.restore()
 
     def _InGossip(self, query):
-        return self.immersiveMode in ["Gossip"] and not "闲聊" in query
+        return self.immersive_mode in ["Gossip"] and not "闲聊" in query
 
     def doResponse(self, query, UUID="", onSay=None, onStream=None):
         """
@@ -166,17 +168,16 @@ class Conversation(object):
         self.appendHistory(0, query, UUID)
 
         if onSay:
-            self.onSay = onSay
+            self.on_say = onSay
 
         if onStream:
-            self.onStream = onStream
+            self.on_stream = onStream
 
         if query.strip() == "":
             self.pardon()
             return
 
-        lastImmersiveMode = self.immersiveMode
-
+        # lastImmersiveMode = self.immersiveMode
         # todo 先屏蔽NLU处理
         # parsed = self.doParse(query)
         # if self._InGossip(query) or not self.brain.query(query, parsed):
@@ -197,7 +198,7 @@ class Conversation(object):
             self.player.stop()
         else:
             # 没命中技能，使用机器人回复
-            if self.ai.SLUG == "openai":
+            if self.ai.support_stream():
                 self.sender.send_message(
                     action=ACTION_ROBOT_THINK,
                     data=StatusData(stage=STAGE_SEARCH, status="start"),
@@ -235,16 +236,16 @@ class Conversation(object):
         return self.nlu.parse(query, **args)
 
     def setImmersiveMode(self, slug):
-        self.immersiveMode = slug
+        self.immersive_mode = slug
 
     def getImmersiveMode(self):
-        return self.immersiveMode
+        return self.immersive_mode
 
     def converse(self, fp, callback=None):
         """核心对话逻辑"""
         logger.info("结束录音")
-        self.lifeCycleHandler.onThink()
-        self.isRecording = False
+        self.life_cycle_handler.onThink()
+        self.is_recording = False
         if self.profiling:
             logger.info("性能调试已打开")
             pr = cProfile.Profile()
@@ -293,7 +294,7 @@ class Conversation(object):
             urls = re.findall(url_pattern, text)
             for url in urls:
                 text = text.replace(url, f'<a href={url} target="_blank">{url}</a>')
-            self.lifeCycleHandler.onResponse(t, text)
+            self.life_cycle_handler.onResponse(t, text)
             self.history.add_message(
                 {
                     "type": t,
@@ -310,12 +311,12 @@ class Conversation(object):
         pass
 
     def pardon(self):
-        if not self.hasPardon:
+        if not self.has_pardon:
             self.say("抱歉，刚刚没听清，能再说一遍吗？", cache=True)
-            self.hasPardon = True
+            self.has_pardon = True
         else:
             self.say("没听清呢")
-            self.hasPardon = False
+            self.has_pardon = False
         self.sender.send_message(
             action=ACTION_ROBOT_SPEAK,
             data=StatusData(stage="", status="end"),
@@ -380,10 +381,10 @@ class Conversation(object):
             f"http://{config.get('/server/host')}:{config.get('/server/port')}/audio/{os.path.basename(voice)}"
             for voice in audios
         ]
-        if self.onSay:
+        if self.on_say:
             logger.info(f"onSay: {msg}, {cached_audios}")
-            self.onSay(msg, cached_audios, plugin=plugin)
-            self.onSay = None
+            self.on_say(msg, cached_audios, plugin=plugin)
+            self.on_say = None
         utils.lruCache()  # 清理缓存
 
     def stream_say(self, stream, cache=False, onCompleted=None):
@@ -409,9 +410,9 @@ class Conversation(object):
         for data in stream():
             logger.info(f"stream data: {data}")
             data_list.append(data)
-            if self.onStream:
+            if self.on_stream:
                 logger.info(f"stream_say onStream:{data}{resp_uuid}")
-                self.onStream(data, resp_uuid)
+                self.on_stream(data, resp_uuid)
             lines, left, skip, skip_prefix = self.split_tts(
                 text=left + data, skip_prefix=skip_prefix
             )
@@ -445,7 +446,7 @@ class Conversation(object):
             if audio:
                 audios.append(audio)
         if self.dh:
-            self.dh.send_command(reqId, "", index + 1, True)
+            self.dh.speak(reqId, "", index + 1, True)
         # if skip_tts:
         #     self._tts_line(line="内容中包含代码，我就不念了", cache=True, index=index, onCompleted=onCompleted)
         msg = "".join(data_list)
@@ -462,7 +463,7 @@ class Conversation(object):
         :param append_history: 是否要追加到聊天记录
         """
         if self.dh:
-            self.dh.send_command(uuid.uuid4().hex, msg, 1, True)
+            self.dh.speak(uuid.uuid4().hex, msg, 1, True)
         else:
             if append_history:
                 self.appendHistory(1, msg, plugin=plugin)
@@ -486,7 +487,7 @@ class Conversation(object):
         :param silent: 是否不触发唤醒表现（主要用于极客模式）
         :param
         """
-        if self.immersiveMode:
+        if self.immersive_mode:
             self.player.stop()
         elif self.player.is_playing():
             self.player.join()  # 确保所有音频都播完
@@ -503,7 +504,7 @@ class Conversation(object):
                 recording_timeout=config.get("recording_timeout", 5) * 4,
             )
             if not silent:
-                self.lifeCycleHandler.onThink()
+                self.life_cycle_handler.onThink()
             if voice:
                 self.sender.send_message(
                     action=ACTION_ROBOT_THINK,
@@ -539,7 +540,7 @@ class Conversation(object):
     def _play_line(self, reqId, line, index, cache, onCompleted) -> Tuple[int, str]:
         audio = ""
         if self.dh:
-            self.dh.send_command(reqId, line, index + 1, False)
+            self.dh.speak(reqId, line, index + 1, False)
             self.tts_count += 1
             index += 1
         else:
@@ -582,7 +583,7 @@ class Conversation(object):
         skip = False
         # prefix not None, 匹配结尾
         if prefix:
-            suffix = re_tts["part"].get(prefix, prefix)
+            suffix = re_tts["pair"].get(prefix, prefix)
             idx = text.find(suffix)
             if idx > -1:
                 skip = True
@@ -593,10 +594,14 @@ class Conversation(object):
             skip = skip or (rec.match(text) is not None)
             text = rec.sub(repl="", string=text)
         logger.debug("cut full: %s", text)
+        # 去掉特殊字符
+        for ch in re_tts["char"]:
+            text = text.replace(ch, "")
+        logger.debug("cut char: %s", text)
         # 匹配开头
         prefix = ""
         prefix_str = ""
-        for pre in re_tts["part"].keys():
+        for pre in re_tts["pair"]:
             idx = text.find(pre)
             if idx > -1:
                 skip = True

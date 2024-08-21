@@ -2,7 +2,7 @@
 
 import collections
 import pyaudio
-from . import snowboydetect
+from snowboy import snowboydetect
 from robot import utils, logging
 import time
 import wave
@@ -103,7 +103,7 @@ class ActiveListener(object):
         interrupt_check=lambda: False,
         sleep_time=0.03,
         silent_count_threshold=15,
-        recording_timeout=100,
+        recording_threshold=100,
     ):
         """
         :param interrupt_check: a function that returns True if the main loop
@@ -112,7 +112,7 @@ class ActiveListener(object):
                                        to mark the end of a phrase that is
                                        being recorded.
         :param float sleep_time: how much time in second every loop waits.
-        :param recording_timeout: limits the maximum length of a recording.
+        :param recording_threshold: limits the maximum length of a recording.
         :return: recorded file path
         """
         logger.debug("activeListen listen()")
@@ -151,8 +151,9 @@ class ActiveListener(object):
             logger.debug("detect voice return")
             return
 
-        silentCount = 0
-        recordingCount = 0
+        silent_count = 0
+        voice_count = 0
+        recording_count = 0
 
         logger.debug("begin activeListen loop")
 
@@ -170,21 +171,22 @@ class ActiveListener(object):
             if status == -1:
                 logger.warning("Error initializing streams or reading audio data")
 
-            stopRecording = False
-            if recordingCount > recording_timeout:
-                stopRecording = True
-            elif status == -2:  # silence found
-                if silentCount > silent_count_threshold:
-                    stopRecording = True
+            stop_recording = False
+            if recording_count > recording_threshold:
+                stop_recording = True
+            elif voice_count and status == -2:  # silence found
+                if silent_count > silent_count_threshold:
+                    stop_recording = True
                 else:
-                    silentCount = silentCount + 1
+                    silent_count += 1
             elif status == 0:  # voice found
-                silentCount = 0
+                silent_count = 0
+                voice_count += 1
 
-            if stopRecording == True:
+            if stop_recording == True:
                 return self.saveMessage()
 
-            recordingCount = recordingCount + 1
+            recording_count += 1
             self.recordedData.append(data)
 
         logger.debug("finished.")
@@ -281,7 +283,7 @@ class HotwordDetector(object):
         sleep_time=0.03,
         audio_recorder_callback=None,
         silent_count_threshold=15,
-        recording_timeout=100,
+        recording_threshold=100,
     ):
         """
         Start the voice detector. For every `sleep_time` second it checks the
@@ -306,7 +308,7 @@ class HotwordDetector(object):
         :param silent_count_threshold: indicates how long silence must be heard
                                        to mark the end of a phrase that is
                                        being recorded.
-        :param recording_timeout: limits the maximum length of a recording.
+        :param recording_threshold: limits the maximum length of a recording.
         :return: None
         """
         self._running = True
@@ -349,6 +351,9 @@ class HotwordDetector(object):
         logger.debug("detecting...")
 
         state = "PASSIVE"
+        silentCount = 0
+        voice_count = 0
+        recordingCount = 0
         while self._running is True:
             if interrupt_check():
                 logger.debug("detect voice break")
@@ -370,6 +375,7 @@ class HotwordDetector(object):
                     self.recordedData.append(data)
                     silentCount = 0
                     recordingCount = 0
+                    voice_count = 0
                     message = "Keyword " + str(status) + " detected at time: "
                     message += time.strftime(
                         "%Y-%m-%d %H:%M:%S", time.localtime(time.time())
@@ -388,15 +394,16 @@ class HotwordDetector(object):
 
             elif state == "ACTIVE":
                 stopRecording = False
-                if recordingCount > recording_timeout:
+                if recordingCount > recording_threshold:
                     stopRecording = True
-                elif status == -2:  # silence found
+                elif voice_count and status == -2:  # silence found
                     if silentCount > silent_count_threshold:
                         stopRecording = True
                     else:
-                        silentCount = silentCount + 1
+                        silentCount += 1
                 elif status == 0:  # voice found
                     silentCount = 0
+                    voice_count += 1
 
                 if stopRecording == True:
                     fname = self.saveMessage()
@@ -404,7 +411,7 @@ class HotwordDetector(object):
                     state = "PASSIVE"
                     continue
 
-                recordingCount = recordingCount + 1
+                recordingCount += 1
                 self.recordedData.append(data)
 
         logger.debug("finished.")

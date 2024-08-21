@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-import fire
 import signal
 import hashlib
 import urllib3
+import fire
 
 from robot.Sender import WebSocketSender
 from robot.Updater import Updater
@@ -67,13 +67,13 @@ class Wukong(object):
     def _detected_callback(self, is_snowboy=True):
         def _start_record():
             logger.info("开始录音")
-            self.conversation.isRecording = True
+            self.conversation.is_recording = True
             utils.setRecordable(True)
 
         if not utils.is_proper_time():
             logger.warning("勿扰模式开启中")
             return
-        if self.conversation.isRecording:
+        if self.conversation.is_recording:
             logger.warning("正在录音中，跳过")
             return
         if is_snowboy:

@@ -484,12 +484,8 @@ class DHPageHandler(BaseHandler):
         if not self.isValidated():
             self.redirect(uri_base("/login"))
         else:
-            self.render(
-                template_name="digital-human.html",
-                session_id=conversation.dh and conversation.dh.sessionId,
-                play_stream_addr=conversation.dh and conversation.dh.play_stream_addr,
-                cmd_status=conversation.dh and conversation.dh.get_cmd_status(),
-            )
+            ctx = conversation.dh and conversation.dh.info()
+            self.render(template_name="digital-human.html", **(ctx or {}))
 
 
 class DHApiHandler(BaseHandler):
@@ -501,6 +497,10 @@ class DHApiHandler(BaseHandler):
             self.get_session_list()
         elif "session-status" == action:
             self.get_session_status()
+        elif "info" == action:
+            self.get_dh_info()
+        else:
+            self.write_error(status_code=404)
 
     def post(self, action: str):
         if "session-create" == action:
@@ -511,6 +511,8 @@ class DHApiHandler(BaseHandler):
             self.close_session()
         elif "create-cmd" == action:
             self.create_cmd()
+        else:
+            self.write_error(status_code=404)
 
     def get_session_list(self):
         func = self.get_func("list_session")
@@ -521,6 +523,11 @@ class DHApiHandler(BaseHandler):
         func = self.get_func("get_session_status")
         if func:
             self.write_data(data=func())
+
+    def get_dh_info(self):
+        data = conversation.dh and conversation.dh.info()
+        data = data or {}
+        self.write_data(data=data or {})
 
     def create_session(self):
         func = self.get_func("create_session")

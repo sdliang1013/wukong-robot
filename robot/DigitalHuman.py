@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+import threading
+import json
+import random
+import uuid
 from abc import ABCMeta, abstractmethod
 import hmac
 import hashlib
@@ -6,12 +10,8 @@ import time
 import base64
 from urllib.parse import quote
 import requests
-import uuid
 import websocket
 from robot import config, logging, scheds
-import threading
-import json
-import random
 
 
 # 通用播报：
@@ -58,8 +58,16 @@ class AbstractDigitalHuman(object):
         return instance
 
     @abstractmethod
-    def send_command(self, reqId, text, seq, ifFinal):
+    def speak(self, reqId, text, seq, ifFinal):
         pass
+
+    @abstractmethod
+    def interrupt(self):
+        pass
+
+    @abstractmethod
+    def info(self) -> dict:
+        return {}
 
 
 class TecentDigitalHuman(AbstractDigitalHuman):
@@ -96,6 +104,13 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         # Try to get ali_yuyin config from config
         return config.get("tencent-dh", {})
 
+    def info(self) -> dict:
+        return dict(
+            session_id=self.session_id,
+            play_stream_addr=self.play_stream_addr,
+            cmd_status=self.ws_cmd and self.ws_cmd.keep_running,
+        )
+
     def create_session(self):
         """
         1. 新建直播流会话
@@ -107,7 +122,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
             # "Header": {
             # },
             "Payload": {
-                "ReqId": GenUUID(),
+                "ReqId": gen_uuid(),
                 "VirtualmanProjectId": self.project_id,
                 "UserId": self.user_id,
                 "Protocol": "webrtc",
@@ -147,7 +162,9 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         """
         url = f"{self.base_url}/listsessionofprojectid"
         params = {"appkey": self.app_key, "timestamp": int(time.time())}
-        data = {"Payload": {"ReqId": GenUUID(), "VirtualmanProjectId": self.project_id}}
+        data = {
+            "Payload": {"ReqId": gen_uuid(), "VirtualmanProjectId": self.project_id}
+        }
         try:
             response = self.http_req.post(url=self.gen_req_url(url, params), json=data)
             if response.status_code == 200:
@@ -176,7 +193,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         url = f"{self.base_url}/statsession"
         params = {"appkey": self.app_key, "timestamp": int(time.time())}
         data = {
-            "Payload": {"ReqId": GenUUID(), "SessionId": session_id or self.session_id}
+            "Payload": {"ReqId": gen_uuid(), "SessionId": session_id or self.session_id}
         }
         try:
             response = self.http_req.post(url=self.gen_req_url(url, params), json=data)
@@ -205,7 +222,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         """
         url = f"{self.base_url}/startsession"
         params = {"appkey": self.app_key, "timestamp": int(time.time())}
-        data = {"Payload": {"ReqId": GenUUID(), "SessionId": self.session_id}}
+        data = {"Payload": {"ReqId": gen_uuid(), "SessionId": self.session_id}}
         try:
             response = self.http_req.post(url=self.gen_req_url(url, params), json=data)
             if response.status_code == 200:
@@ -229,7 +246,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         url = f"{self.base_url}/closesession"
         params = {"appkey": self.app_key, "timestamp": int(time.time())}
         data = {
-            "Payload": {"ReqId": GenUUID(), "SessionId": session_id or self.session_id}
+            "Payload": {"ReqId": gen_uuid(), "SessionId": session_id or self.session_id}
         }
         try:
             response = self.http_req.post(url=self.gen_req_url(url, params), json=data)
@@ -270,49 +287,42 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         self.thread_ws_cmd = threading.Thread(target=self.ws_cmd.run_forever)
         self.thread_ws_cmd.start()
 
-    def send_command(self, reqId, text, seq, isFinal):
+    def send_cmd(self, cmd, data, req_id=None):
         try:
-            action = f'<insert-action type="{random.choice(action_type)}"/> '
-            data = {
+            payload = {
                 "Payload": {
-                    "ReqId": reqId,
+                    "ReqId": req_id or gen_uuid(),
                     "SessionId": self.session_id,
-                    "Command": "SEND_STREAMTEXT",
-                    "Data": {
-                        "Text": action + text,
-                        "Seq": seq,
-                        "IsFinal": isFinal,
-                        # "SmartActionEnabled": True 此参数只对 3D 数字人有效
-                    },
+                    "Command": cmd,
+                    "Data": data,
                 }
             }
-            logger.info(f"send_command: {text}")
             if self.ws_cmd:
-                self.ws_cmd.send(json.dumps(data))
+                self.ws_cmd.send(json.dumps(payload))
             else:
                 logger.error("直播流会话未准备好.")
         except Exception as e:
             logger.critical(f"发送命令失败，原因：{str(e)}", exc_info=True)
 
+    def speak(self, reqId, text, seq, isFinal):
+        data = {
+            "Text": text
+            and f'<insert-action type="{random.choice(seq=action_type)}"/> {text}',
+            "Seq": seq,
+            "IsFinal": isFinal,
+            # "SmartActionEnabled": True 此参数只对 3D 数字人有效
+        }
+        logger.info("speak: %s", text)
+        self.send_cmd(cmd="SEND_STREAMTEXT", data=data, req_id=reqId)
         # 用户可以在函数内部生成时间戳, 只需要传入appkey和accessToken即可获取访问接口所需的公共参数和签名
 
+    def interrupt(self):
+        logger.info("interrupt speak")
+        self.send_cmd(cmd="SEND_TEXT", data={"Interrupt": True})
+
     def cmd_ping(self):
-        try:
-            data = {
-                "Payload": {
-                    "ReqId": GenUUID(),
-                    "SessionId": self.session_id,
-                    "Command": "SEND_HEARTBEAT",
-                    "Data": {"Text": "PING"},
-                }
-            }
-            logger.info("cmd_ping: PING")
-            if self.ws_cmd:
-                self.ws_cmd.send(json.dumps(data))
-            else:
-                logger.error("直播流会话未准备好.")
-        except Exception as e:
-            logger.critical(f"发送心态命令失败，原因：{str(e)}", exc_info=True)
+        logger.info("test cmd heart beat.")
+        self.send_cmd(cmd="SEND_HEARTBEAT", data={"Text": "PING"})
 
     def gen_sign(self, signing_content):
         # 计算 HMAC-SHA256 值
@@ -329,9 +339,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
 
     def gen_req_url(self, base_url, parameter):
         # 按字典序拼接待计算签名的字符串
-        signing_content = "&".join(
-            f"{k}={parameter[k]}" for k in sorted(parameter.keys())
-        )
+        signing_content = "&".join(f"{k}={parameter[k]}" for k in sorted(parameter))
         # 计算签名
         signature = self.gen_sign(signing_content)
         # 拼接访问接口的完整 URL
@@ -387,7 +395,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         self.create_cmd_channel()
         # 启动心跳
         self.sche_heart.add_job(
-            job_id=GenUUID(),
+            job_id=gen_uuid(),
             func=self.cmd_ping,
             name="CmdHeartBeat",
             trigger="interval",
@@ -417,7 +425,7 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         logger.info("DigitalHuman WebSocket Connection opened")
 
 
-def GenUUID():
+def gen_uuid():
     return uuid.uuid4().hex
 
 

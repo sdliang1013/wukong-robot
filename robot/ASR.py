@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import json
+from abc import ABCMeta, abstractmethod
+import requests
 from aip import AipSpeech
 from robot.sdk import TencentSpeech, AliSpeech, XunfeiSpeech, BaiduSpeech, FunASREngine
 from robot import logging, utils, config
-from abc import ABCMeta, abstractmethod
-import requests
 
 logger = logging.getLogger(__name__)
 

@@ -22,8 +22,16 @@ class AbstractRobot(object):
         instance = cls(**profile)
         return instance
 
+    @classmethod
+    def get_config(cls):
+        return {}
+
     def __init__(self, **kwargs):
         pass
+
+    @classmethod
+    def support_stream(cls):
+        return False
 
     @abstractmethod
     def chat(self, texts, parsed):
@@ -42,7 +50,7 @@ class TulingRobot(AbstractRobot):
         """
         图灵机器人
         """
-        super(self.__class__, self).__init__()
+        super(TulingRobot, self).__init__()
         self.tuling_key = tuling_key
 
     @classmethod
@@ -90,11 +98,7 @@ class UnitRobot(AbstractRobot):
         """
         百度UNIT机器人
         """
-        super(self.__class__, self).__init__()
-
-    @classmethod
-    def get_config(cls):
-        return {}
+        super(UnitRobot, self).__init__()
 
     def chat(self, texts, parsed):
         """
@@ -122,7 +126,7 @@ class BingRobot(AbstractRobot):
         """
         bing
         """
-        super(self.__class__, self).__init__()
+        super(BingRobot, self).__init__()
         self.prefix = prefix
         self.proxy = proxy
         self.mode = mode
@@ -177,7 +181,7 @@ class AnyQRobot(AbstractRobot):
         """
         AnyQ机器人
         """
-        super(self.__class__, self).__init__()
+        super(AnyQRobot, self).__init__()
         self.host = host
         self.threshold = threshold
         self.port = port
@@ -287,6 +291,10 @@ class OPENAIRobot(AbstractRobot):
         # Try to get anyq config from config
         return config.get("openai", {})
 
+    @classmethod
+    def support_stream(cls):
+        return True
+
     def stream_chat(self, texts):
         """
         从ChatGPT API获取回复
@@ -296,12 +304,11 @@ class OPENAIRobot(AbstractRobot):
         msg = "".join(texts)
         msg = utils.strip_punctuation(msg)
         msg = self.prefix + msg  # 增加一段前缀
-        logger.info("msg: " + msg)
+        logger.info("msg: %s", msg)
         self.context.append({"role": "user", "content": msg})
 
         header = {
             "Content-Type": "application/json",
-            # "Authorization": "Bearer " + self.openai.api_key
         }
         if self.provider == "openai":
             header["Authorization"] = "Bearer " + self.openai.api_key
@@ -313,15 +320,15 @@ class OPENAIRobot(AbstractRobot):
             )
 
         data = {"model": self.model, "messages": self.context, "stream": True}
-        logger.info(f"使用模型：{self.model}，开始流式请求")
+        logger.info("使用模型：%s，开始流式请求", self.model)
         url = self.api_base + "/completions"
         if self.provider == "azure":
             url = f"{self.api_base}/openai/deployments/{self.model}/chat/completions?api-version={self.api_version}"
         # 请求接收流式数据
         try:
             response = requests.request(
-                "POST",
-                url,
+                method="POST",
+                url=url,
                 headers=header,
                 json=data,
                 stream=True,
@@ -430,7 +437,7 @@ class WenxinRobot(AbstractRobot):
         """
         Wenxin机器人
         """
-        super(self.__class__, self).__init__()
+        super(WenxinRobot, self).__init__()
         self.api_key = api_key
         self.secret_key = secret_key
 
@@ -488,7 +495,7 @@ class TongyiRobot(AbstractRobot):
         """
         Tongyi机器人
         """
-        super(self.__class__, self).__init__()
+        super(TongyiRobot, self).__init__()
         self.api_key = api_key
 
     @classmethod

@@ -108,7 +108,7 @@ def initDetector(wukong):
         )
         # main loop
         try:
-            callbacks = wukong._detected_callback
+            callbacks = wukong.detected_callback
             detector.start(
                 detected_callback=callbacks,
                 audio_recorder_callback=wukong.conversation.converse,

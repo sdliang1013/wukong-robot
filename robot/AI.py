@@ -207,7 +207,7 @@ class AnyQRobot(AbstractRobot):
             respond = json.loads(r.text)
             logger.info(f"anyq response: {respond}")
             if len(respond) > 0:
-                # 有命中，进一步判断 confidence 是否达到要求
+                # 有命中，进一步判断 confidence 是否达``到要求
                 confidence = respond[0]["confidence"]
                 if confidence >= self.threshold:
                     # 命中该问题，返回回答

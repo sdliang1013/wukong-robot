@@ -501,7 +501,7 @@ class Conversation(object):
             )
             voice = listener.listen(
                 silent_count_threshold=config.get("silent_threshold", 15),
-                recording_timeout=config.get("recording_timeout", 5) * 4,
+                recording_threshold=config.get("recording_timeout", 5) * 4,
             )
             if not silent:
                 self.life_cycle_handler.onThink()

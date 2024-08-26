@@ -64,7 +64,7 @@ class Wukong(object):
         utils.clean()
         self.lifeCycleHandler.onKilled()
 
-    def _detected_callback(self, is_snowboy=True):
+    def detected_callback(self, is_snowboy=True):
         def _start_record():
             logger.info("开始录音")
             self.conversation.is_recording = True

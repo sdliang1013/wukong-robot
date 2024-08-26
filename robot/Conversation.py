@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 class Conversation(object):
 
-    def __init__(self, profiling=False, sender=None):
+    def __init__(self, profiling=False, sender=None, detector=None):
         self.brain, self.asr, self.ai, self.tts, self.nlu = None, None, None, None, None
         self.dh_enabled = config.get("/dh_engine/enable", False)
         self.dh = None
@@ -73,6 +73,7 @@ class Conversation(object):
         self.has_pardon = False
         self.player = Player.OrderPlayer()
         self.sender = sender
+        self.detector = detector
         self.life_cycle_handler = LifeCycleHandler(self, sender=sender)
         self.tts_count = 0
         self.tts_index = 0
@@ -314,6 +315,8 @@ class Conversation(object):
         if not self.has_pardon:
             self.say("抱歉，刚刚没听清，能再说一遍吗？", cache=True)
             self.has_pardon = True
+            # 重听, 直接唤醒
+            self.detector.clear_kw()
         else:
             self.say("没听清呢")
             self.has_pardon = False

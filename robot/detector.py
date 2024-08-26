@@ -1,22 +1,33 @@
+# -*- coding: UTF-8 -*-
 import os
+import threading
 import time
 
 from snowboy import snowboydecoder
-from robot import config, logging, utils, constants
+from robot import config, logging, constants
 
 logger = logging.getLogger(__name__)
 
-detector = None
-recorder = None
-porcupine = None
 
+class Detector:
 
-def initDetector(wukong):
-    """
-    初始化离线唤醒热词监听器，支持 snowboy 和 porcupine 两大引擎
-    """
-    global porcupine, recorder, detector
-    if config.get("detector", "snowboy") == "porcupine":
+    def __init__(self) -> None:
+        self.detector = None
+        self.recorder = None
+        self.porcupine = None
+        self.listen_kw = threading.Event()
+
+    def detect(self, wukong):
+        """
+        唤醒热词监听器，支持 snowboy 和 porcupine 两大引擎
+        """
+        self.listen_kw.set()
+        if config.get("detector", "snowboy") == "porcupine":
+            self.run_porcupine(wukong=wukong)
+        else:
+            self.run_snowboy(wukong=wukong)
+
+    def run_porcupine(self, wukong):
         logger.info("使用 porcupine 进行离线唤醒")
 
         import pvporcupine
@@ -26,7 +37,7 @@ def initDetector(wukong):
         keyword_paths = config.get("/porcupine/keyword_paths")
         keywords = config.get("/porcupine/keywords", ["porcupine"])
         if keyword_paths:
-            porcupine = pvporcupine.create(
+            self.porcupine = pvporcupine.create(
                 access_key=access_key,
                 model_path=os.path.join(
                     os.path.dirname(__file__),
@@ -37,39 +48,23 @@ def initDetector(wukong):
                 sensitivities=[config.get("sensitivity", 0.5)] * len(keyword_paths),
             )
         else:
-            porcupine = pvporcupine.create(
+            self.porcupine = pvporcupine.create(
                 access_key=access_key,
                 keywords=keywords,
                 sensitivities=[config.get("sensitivity", 0.5)] * len(keywords),
             )
 
-        recorder = PvRecorder(device_index=-1, frame_length=porcupine.frame_length)
-        recorder.start()
+        self.recorder = PvRecorder(
+            device_index=-1, frame_length=self.porcupine.frame_length
+        )
+        self.recorder.start()
 
         try:
             while True:
-                pcm = recorder.read()
-
-                result = porcupine.process(pcm)
-                if result < 0:
-                    continue
-                kw = keyword_paths[result] if keyword_paths else keywords[result]
-                logger.info(
-                    "[porcupine] Keyword {} Detected at time {}".format(
-                        kw,
-                        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
-                    )
-                )
-                recorder.stop()
-                try:
-                    wukong.detected_callback(False)
-                    wukong.conversation.interrupt()
-                    query = wukong.conversation.activeListen()
-                    wukong.conversation.doResponse(query)
-                except:
-                    logger.critical("数字人走神了.", exc_info=True)
-                finally:
-                    recorder.start()
+                # 关键字处理
+                self.check_kw(keyword_paths=keyword_paths, keywords=keywords)
+                # 聆听
+                self.wakeup(wukong=wukong)
         except pvporcupine.PorcupineActivationError as e:
             logger.error("[Porcupine] AccessKey activation error", stack_info=True)
             raise e
@@ -94,29 +89,75 @@ def initDetector(wukong):
             logger.error("[Porcupine] 初始化 Porcupine 失败", stack_info=True)
             raise e
         except KeyboardInterrupt:
-            logger.info("Stopping ...")
+            logger.info(msg="Stopping ...")
         finally:
-            porcupine and porcupine.delete()
-            recorder and recorder.delete()
+            self.porcupine and self.porcupine.delete()
+            self.recorder and self.recorder.delete()
 
-    else:
+    def run_snowboy(self, wukong):
         logger.info("使用 snowboy 进行离线唤醒")
-        detector and detector.terminate()
+        self.terminate()
         models = constants.getHotwordModel(config.get("hotword", "wukong.pmdl"))
-        detector = snowboydecoder.HotwordDetector(
+        self.detector = snowboydecoder.HotwordDetector(
             models, sensitivity=config.get("sensitivity", 0.5)
         )
         # main loop
         try:
-            callbacks = wukong.detected_callback
-            detector.start(
+            callbacks = wukong._detected_callback
+            self.detector.start(
                 detected_callback=callbacks,
                 audio_recorder_callback=wukong.conversation.converse,
                 interrupt_check=wukong._interrupt_callback,
                 silent_count_threshold=config.get("silent_threshold", 15),
-                recording_timeout=config.get("recording_timeout", 5) * 4,
+                recording_threshold=config.get("recording_timeout", 5) * 4,
                 sleep_time=0.03,
             )
-            detector.terminate()
+            self.terminate()
         except Exception as e:
             logger.critical(f"离线唤醒机制初始化失败：{e}", stack_info=True)
+
+    def terminate(self):
+        self.detector and self.detector.terminate()
+
+    def check_kw(self, keyword_paths, keywords):
+        while self.listen_kw.is_set():
+            pcm = self.recorder.read()
+
+            result = self.porcupine.process(pcm=pcm)
+            if result < 0:
+                continue
+            kw = keyword_paths[result] if keyword_paths else keywords[result]
+            # 清除标记
+            self.listen_kw.clear()
+            logger.info(
+                "[porcupine] Keyword {} Detected at time {}".format(
+                    kw,
+                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
+                )
+            )
+        self.listen_kw.set()
+
+    def wakeup(self, wukong):
+        self.recorder.stop()
+        try:
+            # 唤醒回调
+            wukong.detected_callback(False)
+            # 中断
+            wukong.conversation.interrupt()
+            # 聆听
+            query = wukong.conversation.activeListen()
+            # 响应
+            thread_resp = threading.Thread(
+                target=wukong.conversation.doResponse, kwargs=dict(query=query)
+            )
+            thread_resp.start()
+        except:
+            logger.critical("数字人走神了.", exc_info=True)
+        finally:
+            self.recorder.start()
+
+    def set_kw(self):
+        self.listen_kw.set()
+
+    def clear_kw(self):
+        self.listen_kw.clear()

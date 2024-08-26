@@ -28,14 +28,13 @@ class Wukong(object):
     _debug = False
 
     def init(self):
-        self.detector = None
         self.porcupine = None
         self.gui = None
         self._interrupted = False
         print(
             """
 ********************************************************
-*          sdl-robot - 中文语音对话机器人           *
+*          sdl-robot - 中文语音对话机器人     {}    *
 ********************************************************
 
             后台管理端：http://{}:{}
@@ -50,7 +49,10 @@ class Wukong(object):
             )
         )
         self.sender = WebSocketSender()
-        self.conversation = Conversation(profiling=self._profiling, sender=self.sender)
+        self.detector = detector.Detector()
+        self.conversation = Conversation(
+            profiling=self._profiling, sender=self.sender, detector=self.detector
+        )
         self.conversation.say(
             f"{config.get('first_name', '主人')} 你好！试试对我喊唤醒词叫醒我吧", True
         )
@@ -94,10 +96,9 @@ class Wukong(object):
         server.run(self.conversation, self, debug=self._debug)
         try:
             # 初始化离线唤醒
-            detector.initDetector(self)
-        except AttributeError as e:
+            self.detector.detect(wukong=self)
+        except AttributeError:
             logger.exception("初始化离线唤醒功能失败")
-            pass
 
     def help(self):
         print(

@@ -79,6 +79,8 @@ class Conversation(object):
         self.tts_index = 0
         self.tts_lock = threading.Lock()
         self.play_lock = threading.Lock()
+        self.interrupted = threading.Event()  # 中断标记
+        self.resp_uuid = None  # 当前响应标记
 
     def _lastCompleted(self, index, onCompleted):
         # logger.debug(f"{index}, {self.tts_index}, {self.tts_count}")
@@ -121,13 +123,14 @@ class Conversation(object):
     def getHistory(self):
         return self.history
 
-    def interrupt(self):
+    def interrupt(self, req_id=None):
+        self.interrupted.set()
         if self.player and self.player.is_playing():
             self.player.stop()
         if self.immersive_mode:
             self.brain.pause()
         if self.dh:
-            self.dh.interrupt()
+            self.dh.interrupt(req_id=req_id or self.resp_uuid)
 
     def reInit(self):
         """重新初始化"""
@@ -167,6 +170,8 @@ class Conversation(object):
         statistic.report(1)
         self.interrupt()
         self.appendHistory(0, query, UUID)
+        # 清除中断标记
+        self.interrupted.clear()
 
         if onSay:
             self.on_say = onSay
@@ -192,7 +197,11 @@ class Conversation(object):
         #         else:
         #             logger.debug("checkRestore")
         #             self.checkRestore()
+        resp_uuid = uuid.uuid4().hex
+        lastImmersiveMode = self.immersiveMode
         parsed = {"Domain": "", "Intent": "", "Slot": query}
+        self.resp_uuid = resp_uuid
+
         # 进入闲聊
         if "闭嘴" in query or "暂停" in query:
             # 停止说话
@@ -211,7 +220,12 @@ class Conversation(object):
                     data=StatusData(stage=STAGE_SEARCH, status="end"),
                     message="查找资料结束",
                 )
-                self.stream_say(stream, True, onCompleted=self.checkRestore)
+                self.stream_say(
+                    resp_uuid=resp_uuid,
+                    stream=stream,
+                    cache=True,
+                    onCompleted=self.checkRestore,
+                )
             else:
                 self.sender.send_message(
                     action=ACTION_ROBOT_THINK,
@@ -282,7 +296,7 @@ class Conversation(object):
             if text.endswith(",") or text.endswith("，"):
                 text = text[:-1]
             if UUID == "" or UUID == None or UUID == "null":
-                UUID = str(uuid.uuid1())
+                UUID = uuid.uuid4().hex
             # 将图片处理成HTML
             pattern = r"https?://.+\.(?:png|jpg|jpeg|bmp|gif|JPG|PNG|JPEG|BMP|GIF)"
             url_pattern = r"^https?://.+"
@@ -390,7 +404,7 @@ class Conversation(object):
             self.on_say = None
         utils.lruCache()  # 清理缓存
 
-    def stream_say(self, stream, cache=False, onCompleted=None):
+    def stream_say(self, resp_uuid, stream, cache=False, onCompleted=None):
         """
         从流中逐字逐句生成语音
         :param stream: 文字流，可迭代对象
@@ -404,17 +418,16 @@ class Conversation(object):
         index = 0
         skip_tts = False
         skip_prefix = None
-        resp_uuid = str(uuid.uuid1())
-        reqId = uuid.uuid4().hex
         self.tts_count = 0
         self.player.reset_index(0)
         if onCompleted is None:
             onCompleted = lambda: self._onCompleted(msg)
-        for data in stream():
-            logger.info(f"stream data: {data}")
+        for data in stream():  # 中断
+            if self.interrupted.is_set():
+                logger.info("响应已经被中断....")
+                return
             data_list.append(data)
             if self.on_stream:
-                logger.info(f"stream_say onStream:{data}{resp_uuid}")
                 self.on_stream(data, resp_uuid)
             lines, left, skip, skip_prefix = self.split_tts(
                 text=left + data, skip_prefix=skip_prefix
@@ -428,7 +441,7 @@ class Conversation(object):
                 if not line or not line.strip():
                     continue
                 index, audio = self._play_line(
-                    reqId=reqId,
+                    reqId=resp_uuid,
                     line=line,
                     index=index,
                     cache=cache,
@@ -440,7 +453,7 @@ class Conversation(object):
         if left.strip():
             data_list.append(left)
             index, audio = self._play_line(
-                reqId=reqId,
+                reqId=resp_uuid,
                 line=left,
                 index=index,
                 cache=cache,
@@ -449,7 +462,7 @@ class Conversation(object):
             if audio:
                 audios.append(audio)
         if self.dh:
-            self.dh.speak(reqId, "", index + 1, True)
+            self.dh.speak(resp_uuid, "", index + 1, True)
         # if skip_tts:
         #     self._tts_line(line="内容中包含代码，我就不念了", cache=True, index=index, onCompleted=onCompleted)
         msg = "".join(data_list)
@@ -537,6 +550,8 @@ class Conversation(object):
         """播放一个音频"""
         if self.player:
             self.interrupt()
+            # 清除中断标记
+            self.interrupted.clear()
         self.player = Player.SoxPlayer()
         self.player.play(src, delete=delete, onCompleted=onCompleted)
 
@@ -568,7 +583,7 @@ class Conversation(object):
         skip, text, prefix, prefix_str = cls.skip_tts(text=text, prefix=skip_prefix)
         # 按标点分割
         if text and text.strip():
-            lines = utils.split_paragraph(text=text, token_min_n=4)
+            lines = utils.split_paragraph(text=text, token_min_n=16)
             if lines and not utils.end_punctuation(lines[-1]):
                 left = lines.pop(-1)
         return (

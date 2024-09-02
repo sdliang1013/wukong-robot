@@ -76,7 +76,7 @@ class WebSocketSender:
     def send_message(self, action: str, data=None, message: str = None):
         if isinstance(data, StatusData):
             data = data.dict()
-        resp_uuid = str(object=uuid.uuid1())
+        resp_uuid = uuid.uuid4().hex
         for client in self.clients:
             client.send_response(
                 uuid=resp_uuid, action=action, data=data, message=message

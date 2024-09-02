@@ -162,7 +162,7 @@ class tencentSpeech(object):
             "Text": self.Text,
             "PrimaryLanguage": self.PrimaryLanguage,
             "ModelType": 1,
-            "SessionId": uuid.uuid1(),
+            "SessionId": uuid.uuid4().hex,
         }
         # 按key排序
         config_dict = sorted(config_dict.items())

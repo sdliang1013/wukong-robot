@@ -57,10 +57,10 @@ def getUnit(query, service_id, api_key, secret_key):
     )
     request = {"query": query, "user_id": str(get_mac())[:32]}
     body = {
-        "log_id": str(uuid.uuid1()),
+        "log_id": uuid.uuid4().hex,
         "version": "2.0",
         "service_id": service_id,
-        "session_id": str(uuid.uuid1()),
+        "session_id": uuid.uuid4().hex,
         "request": request,
     }
     try:

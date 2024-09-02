@@ -316,9 +316,11 @@ class TecentDigitalHuman(AbstractDigitalHuman):
         self.send_cmd(cmd="SEND_STREAMTEXT", data=data, req_id=reqId)
         # 用户可以在函数内部生成时间戳, 只需要传入appkey和accessToken即可获取访问接口所需的公共参数和签名
 
-    def interrupt(self):
+    def interrupt(self, req_id=None):
         logger.info("interrupt speak")
-        self.send_cmd(cmd="SEND_TEXT", data={"Interrupt": True})
+        self.send_cmd(
+            cmd="SEND_STREAMTEXT", data={"Interrupt": True, "Seq": 1}, req_id=req_id
+        )
 
     def cmd_ping(self):
         logger.info("test cmd heart beat.")

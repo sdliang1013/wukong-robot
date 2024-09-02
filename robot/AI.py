@@ -252,6 +252,7 @@ class OPENAIRobot(AbstractRobot):
         prefix="",
         proxy="",
         api_base="",
+        organization="",
     ):
         """
         OpenAI机器人
@@ -262,9 +263,14 @@ class OPENAIRobot(AbstractRobot):
             import openai
 
             self.openai = openai
+            # api_key
             if not openai_api_key:
                 openai_api_key = os.getenv("OPENAI_API_KEY")
             self.openai.api_key = openai_api_key
+            # org
+            if not organization:
+                organization = os.getenv("OPENAI_ORG")
+            self.openai.organization = organization
             if proxy:
                 logger.info(f"{self.SLUG} 使用代理：{proxy}")
                 self.openai.proxy = proxy
@@ -312,6 +318,7 @@ class OPENAIRobot(AbstractRobot):
         }
         if self.provider == "openai":
             header["Authorization"] = "Bearer " + self.openai.api_key
+            header["OpenAI-Organization"] = self.openai.organization
         elif self.provider == "azure":
             header["api-key"] = self.openai.api_key
         else:
@@ -353,7 +360,7 @@ class OPENAIRobot(AbstractRobot):
                                     delta = choice["delta"]
                                     if "role" in delta:
                                         role = delta["role"]
-                                    elif "content" in delta:
+                                    if "content" in delta:
                                         delta_content = delta["content"]
                                         i += 1
                                         if i < 40:

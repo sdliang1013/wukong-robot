@@ -107,8 +107,8 @@ class AbstractPlugin(metaclass=ABCMeta):
     def active_listen(self, silent=False):
         if (
             self.SLUG != "geek"
-            and self.con.immersiveMode
-            and self.con.immersiveMode == "geek"
+            and self.con.get_immersive_mode()
+            and self.con.get_immersive_mode() == "geek"
         ):
             # 极客模式下禁止其他插件主动聆听，以避免异常问题
             self.con.interrupt()

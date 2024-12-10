@@ -100,19 +100,21 @@ class Brain(object):
 
     def restore(self):
         """恢复某个技能的处理"""
-        if not self.conversation.immersiveMode:
+        immersive_mode = self.conversation.get_immersive_mode()
+        if not immersive_mode:
             return
         for plugin in self.plugins:
-            if plugin.SLUG == self.conversation.immersiveMode and plugin.restore:
+            if plugin.SLUG == immersive_mode and plugin.restore:
                 logger.warning(f"{plugin.SLUG}: restore")
                 plugin.restore()
 
     def pause(self):
         """暂停某个技能的处理"""
-        if not self.conversation.immersiveMode:
+        immersive_mode = self.conversation.get_immersive_mode()
+        if not immersive_mode:
             return
         for plugin in self.plugins:
-            if plugin.SLUG == self.conversation.immersiveMode and plugin.pause:
+            if plugin.SLUG == immersive_mode and plugin.pause:
                 plugin.pause()
 
     def understand(self, fp):

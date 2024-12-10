@@ -20,7 +20,7 @@ class History(object):
         # cond is notified whenever the message cache is updated
         self.cond = tornado.locks.Condition()
         self.cache = []
-        self.cache_size = 200
+        self.cache_size = 100
 
     def get_messages_since(self, cursor):
         """Returns a list of messages newer than the given cursor.

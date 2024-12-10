@@ -6,9 +6,14 @@ import time
 import time
 from watchdog.observers import Observer
 
-from octopus.robot import log, config, constants, statistic, Player, utils
+from octopus.robot import log, config, constants, Player, utils
 from octopus.robot.ConfigMonitor import ConfigMonitor
-from octopus.robot.Sender import ACTION_ROBOT_LISTEN, ACTION_ROBOT_SLEEP, ACTION_ROBOT_WRITE, ACTION_ROBOT_THINK
+from octopus.robot.Sender import (
+    ACTION_ROBOT_LISTEN,
+    ACTION_ROBOT_SLEEP,
+    ACTION_ROBOT_WRITE,
+    ACTION_ROBOT_THINK,
+)
 from octopus.robot.sdk import LED
 
 logger = log.getLogger(__name__)
@@ -56,7 +61,6 @@ class LifeCycleHandler(object):
         chat-robot 初始化
         """
         config.init()
-        statistic.report(0)
 
         # 初始化配置监听器
         config_event_handler = ConfigMonitor(self._conversation)
@@ -75,8 +79,7 @@ class LifeCycleHandler(object):
         # self._init_muse()
 
     def on_sleep(self):
-        self.sender.put_message(action=ACTION_ROBOT_SLEEP,
-                                message="我先休息一会儿。")
+        self.sender.put_message(action=ACTION_ROBOT_SLEEP, message="我先休息一会儿。")
 
     def on_wakeup(self, is_snowboy=False, notify=True):
         """
@@ -96,8 +99,7 @@ class LifeCycleHandler(object):
         self._conversation.interrupt()
         # self._beep_hi(onCompleted=onCompleted, wait_seconds=0.5)
         if notify:
-            self.sender.put_message(action=ACTION_ROBOT_LISTEN,
-                                    message="我正在聆听...")
+            self.sender.put_message(action=ACTION_ROBOT_LISTEN, message="我正在聆听...")
 
     def on_think(self):
         """
@@ -110,17 +112,22 @@ class LifeCycleHandler(object):
         if config.get("/LED/enable", False):
             LED.think()
         # 返回思考步骤给前端
-        self.sender.put_message(action=ACTION_ROBOT_THINK,
-                                message="我正在思考...")
+        self.sender.put_message(action=ACTION_ROBOT_THINK, message="我正在思考...")
 
-    def on_resp_end(self, text="", resp_uuid=None,):
+    def on_resp_end(
+        self,
+        text="",
+        resp_uuid=None,
+    ):
         """
         思考完成并播放结果的状态
         """
-        self.sender.put_message(action=ACTION_ROBOT_WRITE,
-                                data=dict(end=True),
-                                message="",
-                                resp_uuid=resp_uuid)
+        self.sender.put_message(
+            action=ACTION_ROBOT_WRITE,
+            data=dict(end=True),
+            message="",
+            resp_uuid=resp_uuid,
+        )
         if self._unihiker:
             text = text[:60] + "..." if len(text) >= 60 else text
             self._unihiker.record(1, text)
@@ -137,106 +144,14 @@ class LifeCycleHandler(object):
         logger.info("onKill")
         self._observer.stop()
 
-    def _read_reminders(self):
-        logger.info("重新加载提醒信息")
-        if os.path.exists(LOCAL_REMINDER):
-            with open(LOCAL_REMINDER, "rb") as f:
-                jobs = pickle.load(f)
-                for job in jobs:
-                    if "repeat" in job.remind_time or int(time.time()) < int(
-                            job.job_id
-                    ):
-                        logger.info(f"加入提醒: {job.describe}, job_id: {job.job_id}")
-                        if not (self._conversation.scheduler.has_job(job.job_id)):
-                            self._conversation.scheduler.add_job(
-                                job.remind_time,
-                                job.original_time,
-                                job.content,
-                                lambda: self.alarm(
-                                    job.remind_time, job.content, job.job_id
-                                ),
-                                job_id=job.job_id,
-                            )
-
-    def _init_unihiker(self):
-        global unihiker
-        if config.get("/unihiker/enable", False):
-            try:
-                from octopus.robot.sdk.Unihiker import Unihiker
-
-                self._unihiker = Unihiker()
-                thread.start_new_thread(self._unihiker_shake_event, ())
-            except ImportError:
-                logger.error("错误：请确保当前硬件环境为行空板", stack_info=True)
-
-    def _init_LED(self):
-        if config.get("/LED/enable", False) and config.get("/LED/type") == "aiy":
-            thread.start_new_thread(self._aiy_button_event, ())
-
-    def _init_muse(self):
-        if config.get("/muse/enable", False):
-            try:
-                from octopus.robot import BCI
-
-                self._wakeup = multiprocessing.Event()
-                bci = BCI.MuseBCI(self._wakeup)
-                bci.start()
-                thread.start_new_thread(self._muse_loop_event, ())
-            except ImportError:
-                logger.error("错误：请确保当前硬件搭配了Muse头环并安装了相关驱动", stack_info=True)
-
-    def _unihiker_shake_event(self):
-        """
-        行空板摇一摇的监听逻辑
-        """
-        while True:
-            from pinpong.extension.unihiker import accelerometer
-
-            if accelerometer.get_strength() >= 1.5:
-                logger.info("行空板摇一摇触发唤醒")
-                self._conversation.interrupt()
-                query = self._conversation.active_listen()
-                self._conversation.do_response(query)
-            time.sleep(0.1)
-
-    def _aiy_button_event(self):
-        """
-        Google AIY VoiceKit 的监听逻辑
-        """
-        try:
-            from aiy.board import Board
-        except ImportError:
-            logger.error("错误：请确保当前硬件环境为Google AIY VoiceKit并正确安装了驱动", stack_info=True)
-            return
-        with Board() as board:
-            while True:
-                board.button.wait_for_press()
-                logger.info("Google AIY Voicekit 触发唤醒")
-                self._conversation.interrupt()
-                query = self._conversation.active_listen()
-                self._conversation.do_response(query)
-
-    def _muse_loop_event(self):
-        """
-        Muse 头环的监听逻辑
-        """
-        while True:
-            self._wakeup.wait()
-            self._conversation.interrupt()
-            logger.info("Muse 头环触发唤醒")
-            query = self._conversation.active_listen()
-            self._conversation.do_response(query)
-            self._wakeup.clear()
-
     def _beep_hi(self, onCompleted=None, wait_seconds=None):
-        # hi = ["在呢", "请说"]
-        # self._conversation.say_simple(msg=random.choice(hi), cache=True)
-        Player.play(fname=constants.getRS("beep_hi.wav"),
-                    onCompleted=onCompleted,
-                    wait_seconds=wait_seconds)
+        Player.play(
+            fname=constants.getRS("beep_hi.wav"),
+            onCompleted=onCompleted,
+            wait_seconds=wait_seconds,
+        )
 
     def _beep_lo(self):
-        # self._conversation.say_simple(msg="让我想一想", cache=True)
         Player.play(fname=constants.getRS("beep_lo.wav"))
 
 

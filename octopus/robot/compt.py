@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from abc import ABCMeta, abstractmethod
+import collections
 import subprocess
 import threading
 import time
@@ -451,6 +452,23 @@ class Robot(object):
     @abstractmethod
     def close_log(self):
         pass
+
+
+class ByteBuffer(object):
+    """Ring buffer to hold audio from PortAudio"""
+
+    def __init__(self, size=1024):
+        self._buf = collections.deque(maxlen=size)
+
+    def extend(self, data: bytes):
+        """Adds data to the end of buffer"""
+        self._buf.extend(data)
+
+    def get(self):
+        """Retrieves data from the beginning of buffer and clears it"""
+        tmp = bytes(bytearray(self._buf))
+        self._buf.clear()
+        return tmp
 
 
 if __name__ == "__main__":

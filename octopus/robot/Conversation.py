@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-import cProfile
-import io
 import os
-import pstats
 import re
 import threading
 import time
@@ -15,7 +12,6 @@ from octopus.robot import (
     AI,
     ASR,
     config,
-    constants,
     log,
     NLU,
     Player,
@@ -27,18 +23,16 @@ from octopus.robot.Brain import Brain
 from octopus.robot.LifeCycleHandler import LifeCycleEvent
 from octopus.robot.Scheduler import Scheduler
 from octopus.robot.Sender import (
-    StatusData,
-    ACTION_ROBOT_LISTEN,
     ACTION_USER_SPEAK,
     ACTION_ROBOT_THINK,
     ACTION_ROBOT_SPEAK,
     STAGE_UNDERSTAND,
     STAGE_SEARCH,
+    StatusData,
     WebSocketSender,
 )
 from octopus.robot.compt import StreamStr
 from octopus.robot.sdk import History
-from octopus.snowboy import snowboydecoder
 
 # tts输出规则
 re_tts = {
@@ -81,8 +75,8 @@ class Conversation(object):
         # 历史会话消息
         self.history = History.History()
         # 沉浸模式，处于这个模式下，被打断后将自动恢复这个技能
-        self.matchPlugin = None
-        self.immersiveMode = None
+        self.plugin_cache = None
+        self.immersive_mode = None
         self.profiling = profiling
         self.on_say = None
         self.on_stream = None
@@ -91,7 +85,6 @@ class Conversation(object):
         self.interrupted = threading.Event()  # 中断标记
         self.manual_break_time = None  # 中断时刻
         self.resp_uuid = None  # 当前响应标记
-        self.pardon_count = 0
         self.listener = None  # 聆听者
         self.speaker = OrderSpeaker(life_cycle_event=life_cycle_event, sender=sender)
         # 初始化
@@ -109,49 +102,6 @@ class Conversation(object):
         except Exception as e:
             logger.critical("对话初始化失败：%s", str(e), exc_info=True)
 
-    def active_listen(self, silent=False, interrupt_check=None):
-        """
-        主动问一个问题(适用于多轮对话)
-        :param silent: 是否不触发唤醒表现（主要用于极客模式）
-        :param
-        """
-        logger.info("进入主动聆听...")
-        try:
-            self.listener = snowboydecoder.ActiveListener(
-                [constants.getHotwordModel(config.get("hotword", "octopus.pmdl"))]
-            )
-            voice = self.listener.listen(
-                interrupt_check=interrupt_check,
-                silent_count_threshold=config.get("silent_threshold", 15),
-                recording_threshold=config.get("recording_timeout", 5) * 4,
-            )
-            if not silent:
-                self.life_cycle_event.fire_event("think")
-            if voice:
-                self.sender.put_message(
-                    action=ACTION_ROBOT_THINK,
-                    data=StatusData(stage=STAGE_UNDERSTAND, end=False).dict(),
-                    message="开始理解您的内容",
-                )
-                query = self.asr.transcribe(voice)
-                self.sender.put_message(
-                    action=ACTION_USER_SPEAK,
-                    data=StatusData(stage=STAGE_UNDERSTAND, end=True).dict(),
-                    message=query,
-                    t=0,
-                )
-                utils.check_and_delete(voice)
-                return query
-            return ""
-        except Exception as e:
-            self.sender.put_message(
-                action=ACTION_ROBOT_LISTEN,
-                data=dict(listen=False),
-                message="抱歉, 遇到些问题，能再说一遍吗？",
-            )
-            logger.critical("主动聆听失败：%s", str(e), exc_info=True)
-            return ""
-
     def do_response(self, query, req_uuid=None, onSay=None):
         """
         响应指令
@@ -168,7 +118,6 @@ class Conversation(object):
         self.interrupt()
         # 停止说话
         if query in ["暂停。", "停止。", "闭嘴。", "停一下。"]:
-            self.clear_pardon()
             return
 
         self._append_history(t=0, text=query, text_id=req_uuid)
@@ -179,12 +128,12 @@ class Conversation(object):
         self.clear_interrupt()
         # 响应内容
         # todo: 调用NLU, 识别指令动作
+        # nlu_res = self.do_parse(query=query)
         # 没命中技能，使用机器人回复
         resp_uuid = uuid.uuid4().hex
         self.resp_uuid = resp_uuid
         # 不用self.resp_uuid, 避免多线程冲突
         self._response_gpt(query=query, resp_uuid=resp_uuid)
-        self.clear_pardon()
 
     def say_simple(
         self,
@@ -229,7 +178,7 @@ class Conversation(object):
     def interrupt(self, req_id=None, manual=False, interrupt_time=None):
         self.interrupted.set()
         self.speaker.interrupt(req_id or self.resp_uuid)
-        if self.immersiveMode:
+        if self.immersive_mode:
             self.brain.pause()
         # 清空数据
         if manual:
@@ -253,34 +202,24 @@ class Conversation(object):
             t=0,
         )
         self.speaker.speak(msg="没听清呢。")
-        self.clear_pardon()
-        # self.life_cycle_event.fire_event(event="sleep")  # 休眠
-
-    def has_pardon(self, up: bool = False) -> bool:
-        if up:
-            self.pardon_count += 1
-        return self.pardon_count < 2
-
-    def clear_pardon(self):
-        self.pardon_count = 0
 
     def getHistory(self):
         return self.history
 
     def check_restore(self):
-        if self.immersiveMode:
+        if self.immersive_mode:
             logger.info("处于沉浸模式，恢复技能")
             self.life_cycle_event.fire_event("restore")
             self.brain.restore()
 
-    def setImmersiveMode(self, slug):
-        self.immersiveMode = slug
+    def set_immersive_mode(self, slug):
+        self.immersive_mode = slug
 
-    def getImmersiveMode(self):
-        return self.immersiveMode
+    def get_immersive_mode(self):
+        return self.immersive_mode
 
     def set_plugin(self, plugin):
-        self.matchPlugin = plugin
+        self.plugin_cache = plugin
 
     def set_on_stream(self, on_stream):
         self.on_stream = on_stream
@@ -530,9 +469,6 @@ class Conversation(object):
 
     def _onCompleted(self, msg):
         pass
-
-    def _InGossip(self, query):
-        return self.immersiveMode in ["Gossip"] and not "闲聊" in query
 
 
 class OrderSpeaker:

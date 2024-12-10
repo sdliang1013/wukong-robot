@@ -219,18 +219,26 @@
 
 <div class="viewcode-block" id="Brain.restore"><a class="viewcode-back" href="../../robot.html#robot.Brain.Brain.restore">[文档]</a>    <span class="k">def</span> <span class="nf">restore</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot; 恢复某个技能的处理 &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">conversation</span><span class="o">.</span><span class="n">immersiveMode</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span
+          class="n">conversation</span><span class="o">.</span><span class="n">immersive_mode</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="k">for</span> <span class="n">plugin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">plugin</span><span class="o">.</span><span class="n">SLUG</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">conversation</span><span class="o">.</span><span class="n">immersiveMode</span> <span class="ow">and</span> <span class="n">plugin</span><span class="o">.</span><span class="n">restore</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">plugin</span><span class="o">.</span><span class="n">SLUG</span> <span
+              class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">conversation</span><span
+              class="o">.</span><span class="n">immersive_mode</span> <span class="ow">and</span> <span class="n">plugin</span><span
+              class="o">.</span><span class="n">restore</span><span class="p">:</span>
                 <span class="n">plugin</span><span class="o">.</span><span class="n">restore</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="Brain.pause"><a class="viewcode-back" href="../../robot.html#robot.Brain.Brain.pause">[文档]</a>    <span class="k">def</span> <span class="nf">pause</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot; 暂停某个技能的处理 &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">conversation</span><span class="o">.</span><span class="n">immersiveMode</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span
+          class="n">conversation</span><span class="o">.</span><span class="n">immersive_mode</span><span class="p">:</span>
             <span class="k">return</span>
         <span class="k">for</span> <span class="n">plugin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugins</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">plugin</span><span class="o">.</span><span class="n">SLUG</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">conversation</span><span class="o">.</span><span class="n">immersiveMode</span> <span class="ow">and</span> <span class="n">plugin</span><span class="o">.</span><span class="n">pause</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">plugin</span><span class="o">.</span><span class="n">SLUG</span> <span
+              class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">conversation</span><span
+              class="o">.</span><span class="n">immersive_mode</span> <span class="ow">and</span> <span class="n">plugin</span><span
+              class="o">.</span><span class="n">pause</span><span class="p">:</span>
                 <span class="n">plugin</span><span class="o">.</span><span class="n">pause</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="Brain.understand"><a class="viewcode-back" href="../../robot.html#robot.Brain.Brain.understand">[文档]</a>    <span class="k">def</span> <span class="nf">understand</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fp</span><span class="p">):</span>

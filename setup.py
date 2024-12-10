@@ -17,7 +17,6 @@ pkg_data = {
         "www/templates/*",
         "resources/*",
         "tools/*",
-        "temp/DIR",
     ],
 }
 

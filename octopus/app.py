@@ -109,8 +109,8 @@ class Octopus(object):
 
     def _signal_handler(self, signal, frame):
         utils.clean()
-        self.stop()
         self.life_cycle_event.fire_event("killed")
+        self.stop()
 
     def run(self):
         self.init()

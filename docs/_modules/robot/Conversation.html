@@ -165,7 +165,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">history</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="c1"># 沉浸模式，处于这个模式下，被打断后将自动恢复这个技能</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">matchPlugin</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">immersiveMode</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">immersive_mode</span> <span class="o">=</span> <span
+            class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">isRecording</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">profiling</span> <span class="o">=</span> <span class="n">profiling</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">onSay</span> <span class="o">=</span> <span class="kc">None</span>
@@ -178,7 +179,8 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">player</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">player</span><span class="o">.</span><span class="n">is_playing</span><span class="p">():</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">player</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">player</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">immersiveMode</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">immersive_mode</span><span
+            class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">brain</span><span class="o">.</span><span class="n">pause</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="Conversation.reload"><a class="viewcode-back" href="../../robot.html#robot.Conversation.Conversation.reload">[文档]</a>    <span class="k">def</span> <span class="nf">reload</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -195,7 +197,8 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s2">&quot;对话初始化失败：</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span></div>
 
 <div class="viewcode-block" id="Conversation.checkRestore"><a class="viewcode-back" href="../../robot.html#robot.Conversation.Conversation.checkRestore">[文档]</a>    <span class="k">def</span> <span class="nf">checkRestore</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">immersiveMode</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">immersive_mode</span><span
+            class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">brain</span><span class="o">.</span><span class="n">restore</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="Conversation.doResponse"><a class="viewcode-back" href="../../robot.html#robot.Conversation.Conversation.doResponse">[文档]</a>    <span class="k">def</span> <span class="nf">doResponse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">UUID</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">onSay</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -210,7 +213,8 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">pardon</span><span class="p">()</span>
             <span class="k">return</span>
 
-        <span class="n">lastImmersiveMode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">immersiveMode</span>
+        <span class="n">lastImmersiveMode</span> <span class="o">=</span> <span class="bp">self</span><span
+            class="o">.</span><span class="n">immersive_mode</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">brain</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">query</span><span class="p">):</span>
             <span class="c1"># 没命中技能，使用机器人回复</span>
@@ -230,10 +234,12 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">nlu</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Conversation.setImmersiveMode"><a class="viewcode-back" href="../../robot.html#robot.Conversation.Conversation.setImmersiveMode">[文档]</a>    <span class="k">def</span> <span class="nf">setImmersiveMode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">slug</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">immersiveMode</span> <span class="o">=</span> <span class="n">slug</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">immersive_mode</span> <span class="o">=</span> <span
+            class="n">slug</span></div>
 
 <div class="viewcode-block" id="Conversation.getImmersiveMode"><a class="viewcode-back" href="../../robot.html#robot.Conversation.Conversation.getImmersiveMode">[文档]</a>    <span class="k">def</span> <span class="nf">getImmersiveMode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">immersiveMode</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">immersive_mode</span>
+        </div>
 
 <div class="viewcode-block" id="Conversation.converse"><a class="viewcode-back" href="../../robot.html#robot.Conversation.Conversation.converse">[文档]</a>    <span class="k">def</span> <span class="nf">converse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fp</span><span class="p">,</span> <span class="n">callback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot; 核心对话逻辑 &quot;&quot;&quot;</span>

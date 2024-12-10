@@ -1,0 +1,793 @@
+# -*- coding: utf-8 -*-
+import datetime
+import enum
+import re
+import threading
+import time
+from abc import ABCMeta, abstractmethod
+from typing import Tuple, Optional
+
+import numpy
+
+from octopus import resource_file
+from octopus.robot import config, log, constants, utils, RTAsr
+from octopus.robot.LifeCycleHandler import LifeCycleEvent
+from octopus.robot.Sender import WebSocketSender, ACTION_USER_SPEAK
+from octopus.robot.compt import CircularQueue, ThreadManager, VolumeControl, InfraredDevice
+from octopus.snowboy import snowboydecoder
+
+logger = log.getLogger(__name__)
+
+
+class DetectStatus(int, enum.Enum):
+    DETECT = 0  # 关键字检测
+    LISTEN = 1  # 问题聆听
+    RESPONSE = 2  # 回答
+
+
+class AbstractDetector(object):
+    __metaclass__ = ABCMeta
+
+    @classmethod
+    def get_instance(cls, **kwargs):
+        instance = cls(**kwargs)
+        return instance
+
+    def __init__(self, **kwargs):
+        pass
+
+    @abstractmethod
+    def detect(self, **kwargs):
+        """唤醒热词监听器，支持 snowboy, porcupine, funasr 引擎"""
+        ...
+
+    @abstractmethod
+    def start_log(self):
+        ...
+
+    @abstractmethod
+    def stop_log(self):
+        ...
+
+    @abstractmethod
+    def clear_detect(self, **kwargs):
+        ...
+
+    @abstractmethod
+    def terminate(self):
+        ...
+
+    @abstractmethod
+    def get_key_words(self):
+        ...
+
+
+class PorcupineDetector(AbstractDetector):
+    SLUG = "porcupine"
+
+    def __init__(self, life_cycle_event: LifeCycleEvent, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.life_cycle_event = life_cycle_event
+        self.detector = None
+        self.recorder = None
+        self.porcupine = None
+        self.listening = threading.Event()
+        self.interaction = threading.Event()
+        self.interact_wait_limit = datetime.timedelta(seconds=120)  # 交流等待时间
+        self.key_words = config.get(item="/porcupine/keywords", default=["porcupine"])
+        # 日志
+        self.log_listen_cnt = 0
+        self.flag_log = threading.Event()
+        self.thread_log = None
+
+    def detect(self, octopus, **kwargs):
+        """
+        唤醒热词监听器，支持 snowboy 和 porcupine 两大引擎
+        """
+        logger.info("使用 porcupine 进行离线唤醒")
+
+        import pvporcupine
+        from pvrecorder import PvRecorder
+
+        access_key = config.get(item="/porcupine/access_key")
+        keyword_paths = config.get(item="/porcupine/keyword_paths")
+        if keyword_paths:
+            self.porcupine = pvporcupine.create(
+                access_key=access_key,
+                model_path=resource_file("porcupine_params.pv"),
+                keyword_paths=[constants.getConfigData(kw) for kw in keyword_paths],
+                sensitivities=[config.get(item="sensitivity", default=0.5)] * len(keyword_paths),
+            )
+        else:
+            self.porcupine = pvporcupine.create(
+                access_key=access_key,
+                keywords=self.key_words,
+                sensitivities=[config.get(item="sensitivity", default=0.5)] * len(self.key_words),
+            )
+
+        self.recorder = PvRecorder(device_index=-1, frame_length=self.porcupine.frame_length)
+        self.set_listen()  # 唤醒
+        self.set_interact()  # 交互
+        try:
+            while True:
+                # 唤醒
+                self.wakeup(keyword_paths=keyword_paths, keywords=self.key_words,
+                            pvporcupine=pvporcupine)
+                self.on_wakeup(octopus=octopus)
+                self.set_listen()
+                # 互动
+                self.interact(octopus=octopus)
+                self.set_interact()
+        except KeyboardInterrupt:
+            logger.info(msg="Stopping ...")
+        except:
+            logger.critical("app err:", exc_info=True)
+            raise
+        finally:
+            if self.porcupine:
+                self.porcupine.delete()
+            if self.recorder:
+                self.recorder.delete()
+
+    def wakeup(self, keyword_paths, keywords, pvporcupine) -> bool:
+        kw = None
+        try:
+            # 开始监听
+            self.recorder.start()
+            while self.is_listening():
+                pcm = self.recorder.read()
+
+                result = self.porcupine.process(pcm=pcm)
+                if result < 0:
+                    self.log_listen_cnt = (self.log_listen_cnt + 1) % 100
+                    continue
+                kw = keyword_paths[result] if keyword_paths else keywords[result]
+                # 清除标记
+                self.clear_listen()
+                logger.info(
+                    "[porcupine] Keyword {} Detected at time {}".format(
+                        kw,
+                        time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.localtime(time.time())
+                        ),
+                    )
+                )
+            return kw
+        except pvporcupine.PorcupineActivationError as e:
+            logger.error("[Porcupine] AccessKey activation error", stack_info=True)
+            raise e
+        except pvporcupine.PorcupineActivationLimitError as e:
+            logger.error(
+                f"[Porcupine] AccessKey has reached it's temporary device limit",
+                stack_info=True,
+            )
+            raise e
+        except pvporcupine.PorcupineActivationRefusedError as e:
+            logger.error(
+                msg="[Porcupine] AccessKey refused", stack_info=True
+            )
+            raise e
+        except pvporcupine.PorcupineActivationThrottledError as e:
+            logger.error(
+                msg="[Porcupine] AccessKey has been throttled",
+                stack_info=True,
+            )
+            raise e
+        except pvporcupine.PorcupineError as e:
+            logger.error("[Porcupine] 初始化 Porcupine 失败", stack_info=True)
+            raise e
+        finally:
+            # 停止监听
+            self.recorder.stop()
+
+    def on_wakeup(self, octopus):
+        try:
+            # 中断之前的处理
+            octopus.conversation.interrupt()
+            # 唤醒回调
+            # octopus.detected_callback(False)
+            self.life_cycle_event.fire_event(event="wakeup")
+        except:
+            logger.critical("唤醒时走神了.", exc_info=True)
+
+    def interact(self, octopus):
+        try:
+            # 聆听
+            query = octopus.conversation.active_listen(
+                interrupt_check=lambda: not self.is_interaction()).strip()
+            # 响应(异步线程)
+            # thread_resp = ThreadManager.new(target=octopus.conversation.do_response, 
+            #                         kwargs=dict(query=query))
+            # thread_resp.start()
+            # 先同步线程: 以免在嘈杂环境, 聆听混乱, 回答混乱.
+            octopus.conversation.do_response(query=query)
+        except:
+            logger.critical("数字人走神了.", exc_info=True)
+
+    def interact_no_wakeup(self, octopus):
+        try:
+            time_limit = self.interact_limit_time()
+            # 保持交流, 直到超时
+            while self.is_interaction():
+                # 聆听
+                query = octopus.conversation.active_listen(
+                    interrupt_check=lambda: not self.is_interaction()).strip()
+                # 空内容处理
+                if not query:
+                    self.on_query_empty(octopus=octopus, time_limit=time_limit)
+                    continue
+                # 响应(异步线程)
+                # thread_resp = ThreadManager.new(target=octopus.conversation.do_response, 
+                #                         kwargs=dict(query=query))
+                # thread_resp.start()
+                # 先同步线程: 以免在嘈杂环境, 聆听混乱, 回答混乱.
+                octopus.conversation.do_response(query=query)
+                time_limit = self.interact_limit_time()
+        except:
+            logger.critical("数字人走神了.", exc_info=True)
+
+    def interact_limit_time(self) -> datetime.datetime:
+        return datetime.datetime.now() + self.interact_wait_limit
+
+    def on_query_empty(self, octopus, time_limit: datetime.datetime):
+        # 在机器人没说话的时候, 才能pardon
+        if not octopus.status.is_speaking():
+            octopus.conversation.pardon()
+        # 超时中断
+        if datetime.datetime.now() > time_limit:
+            self.goto_sleep(conversation=octopus.conversation)
+
+    def goto_sleep(self, conversation):
+        # 中断之前的处理
+        # self.clear_interact()
+        # conversation.interrupt()
+        self.life_cycle_event.fire_event(event="sleep")
+        self.set_listen()  # 唤醒
+
+    def set_listen(self):
+        self.listening.set()
+
+    def clear_detect(self, **kwargs):
+        self.clear_listen()
+
+    def clear_listen(self):
+        self.listening.clear()
+
+    def is_listening(self):
+        return self.listening.is_set()
+
+    def set_interact(self):
+        self.interaction.set()
+
+    def clear_interact(self):
+        self.interaction.clear()
+
+    def is_interaction(self):
+        return self.interaction.is_set()
+
+    def log_listen(self):
+        while self.flag_log.is_set():
+            logger.info("listen keywords: none=%s, listening=%s",
+                        self.log_listen_cnt, self.is_listening())
+            time.sleep(1)
+
+    def start_log(self):
+        if self.thread_log and self.thread_log.is_alive():
+            return
+        self.flag_log.set()
+        self.thread_log = ThreadManager.new(target=self.log_listen)
+        self.thread_log.start()
+
+    def stop_log(self):
+        self.flag_log.clear()
+        self.thread_log = None
+
+    def terminate(self):
+        self.stop_log()
+
+    @abstractmethod
+    def get_key_words(self):
+        return self.key_words
+
+
+class SnowboyDetector(AbstractDetector):
+    SLUG = "snowboy"
+
+    def __init__(self, life_cycle_event: LifeCycleEvent, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.life_cycle_event = life_cycle_event
+        self.detector = None
+
+    def detect(self, octopus, **kwargs):
+        """
+        唤醒热词监听器，支持 snowboy 和 porcupine 两大引擎
+        """
+        logger.info("使用 snowboy 进行离线唤醒")
+        self.terminate()
+        models = constants.getHotwordModel(config.get("hotword", "octopus.pmdl"))
+        self.detector = snowboydecoder.HotwordDetector(
+            models, sensitivity=config.get("sensitivity", 0.5)
+        )
+        # main loop
+        try:
+            callbacks = lambda: self.life_cycle_event.fire_event(event="wakeup")
+            self.detector.start(
+                detected_callback=callbacks,
+                audio_recorder_callback=octopus.conversation.converse,
+                interrupt_check=octopus._interrupt_callback,
+                silent_count_threshold=config.get("silent_threshold", 15),
+                recording_threshold=config.get("recording_timeout", 5) * 4,
+                sleep_time=0.03,
+            )
+            self.terminate()
+        except Exception as e:
+            logger.critical(f"离线唤醒机制初始化失败：{e}", stack_info=True)
+
+    def terminate(self):
+        if self.detector:
+            self.detector.terminate()
+
+
+class RealTimeDetector(AbstractDetector):
+    SLUG = "realtime"
+
+    def __init__(self, life_cycle_event: LifeCycleEvent, sender: WebSocketSender, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.life_cycle_event = life_cycle_event
+        self.sender = sender
+
+        self.running = threading.Event()  # 运行标记
+        self.listening = threading.Event()  # 聆听标记
+        self.querying = threading.Event()  # 识别查询内容标记
+        self.responding = threading.Event()  # 机器人回答标记
+        self.need_query = True
+        self.listen_data = list()  # 聆听内容
+        self.query_data = list()  # 查询内容
+        self.detect_queue = CircularQueue(2)
+        self.ok_final = True  # False-关键字并且online状态;True-关键字并且offline
+        self.msg_lock = threading.Lock()
+        self.keywords = dict((kw, len(kw))
+                             for kw in config.get(item="/realtime/keywords", default=["你好", "小惠"]))
+        # 日志
+        self.log_listen_cnt = 0
+        self.flag_log = threading.Event()
+        self.thread_log = None
+        # 红外设备控制
+        self.human_ok = threading.Event()
+        self.human_ok.set()
+        self.infrared_device = self._init_infrared()
+        # 麦克风控制
+        self.listener = RealtimeListener()
+        self.interrupt_time = config.get('/realtime/interrupt_time', 1)
+        # 扬声器控制
+        self.volume_min = config.get("/volume/min", 10)
+        self.volume_default = config.get("/volume/default", 70)
+        self.volume_thread = None
+        if config.get("/volume/enabled", False):
+            self.volume_thread = ThreadManager.new(target=self.set_volume_on_listen)
+
+    def detect(self, octopus, **kwargs):
+        """
+        唤醒热词监听器
+        """
+        # 初始化
+        silent_threshold = config.get("silent_threshold", 20)
+        recording_threshold = config.get("recording_timeout", 100)
+        try:
+            self.running.set()
+            self.listener.start(
+                on_message=lambda data, **kwarg: self.on_message(
+                    conversation=octopus.conversation, data=data, **kwarg))  # 启动
+            if self.volume_thread:
+                self.volume_thread.start()
+            while self.running.is_set():
+                # 清理
+                self.detect_queue.clear()
+                # 问题聆听
+                self.listening.wait()
+                ok = self.listen_query(interrupt_check=lambda: not self.listening.is_set(),
+                                       silent_threshold=silent_threshold,
+                                       recording_threshold=recording_threshold, )
+                # 响应
+                if ok:
+                    self.responding.wait()
+                    self.response_query(conversation=octopus.conversation)
+        except KeyboardInterrupt:
+            logger.info(msg="Stopping ...")
+        except:
+            logger.critical("app err:", exc_info=True)
+            raise
+        finally:
+            self.stop()
+
+    def stop(self):
+        # 关闭监听
+        self.listener.stop()
+        # 关闭红外监听
+        if self.infrared_device:
+            self.infrared_device.detect_off()
+            time.sleep(1)
+            self.infrared_device.close()
+        # 关闭日志
+        self.stop_log()
+
+    def on_message(self, conversation, data: RTAsr.AsrResponse, **kwargs):
+        # 红外启动, 没检测到人
+        if self.infrared_device and not self.human_ok.is_set():
+            return
+        text = data.text
+        end = data.is_end
+        # 空判断
+        if not text:
+            return
+        text = utils.stripStartPunc(text)
+        logger.debug("%s: %s", '识别结果' if end else '实时内容', text)
+        with self.msg_lock:
+            # 关键字检测
+            if not self.listening.is_set() and not self.querying.is_set():
+                ok, text = self.detect_message(text=text, end=end)
+                if ok:
+                    self.clear_detect(conversation=conversation)
+                    self.ok_final = end
+            # 处理关键字所在的句子(去掉关键词之前的无效内容)
+            if end and not self.ok_final:
+                self.ok_final = True
+                _, text = self.detect_words(text=text)
+            # 附加查询内容
+            if text:
+                self._append_text(text=text, end=end,
+                                  conversation=conversation)
+
+    def detect_message(self, text, end) -> Tuple[bool, str]:
+        content = text
+        if not end:
+            self.detect_queue.enqueue(text)
+            content = "".join(self.detect_queue.all())
+        return self.detect_words(text=content)
+
+    def detect_words(self, text: str, ) -> Tuple[bool, str]:
+        for kw, l_kw in self.keywords.items():
+            idx = text.find(kw)
+            if idx >= 0:
+                return True, utils.stripStartPunc(text[l_kw + idx:])
+        return False, ""
+
+    def on_wakeup(self, conversation):
+        # 中断之前的处理
+        if conversation:
+            conversation.interrupt()
+        # 唤醒回调
+        self.life_cycle_event.fire_event(event="wakeup")
+
+    def listen_query(self,
+                     interrupt_check,
+                     silent_threshold=20,
+                     recording_threshold=100,
+                     interval_time: float = 0.05, ):
+        """
+        定时检查query内容
+        如果 recording 超过时长, 或者 silent > threshold, 则返回
+        """
+        try:
+            recording_count = 0
+            silent_count = 0
+            len_last = len(self.listen_data)
+            while self.need_query:
+                # 中断
+                if interrupt_check and interrupt_check():
+                    return True
+                # 超过时长
+                recording_count += 1
+                if recording_count > recording_threshold:
+                    return True
+                len_now = len(self.listen_data)
+                # 空内容
+                if len_now == 0:
+                    time.sleep(interval_time)
+                    continue
+                # 有内容, 判断静音阈值
+                if len_now and silent_count > silent_threshold:  # silence
+                    return True
+                # 计算静音
+                if len_now <= len_last:
+                    silent_count += 1
+                len_last = len_now
+                time.sleep(interval_time)
+        except:
+            logger.critical("数字人走神了.", exc_info=True)
+            return False
+        finally:
+            self.clear_listening()
+            self.clear_querying()
+
+    def response_query(self, conversation, **kwargs):
+        """响应"""
+        try:
+            query = "".join(self.query_data)
+            # 清理
+            self.listen_data.clear()
+            self.query_data.clear()
+            # 回答
+            conversation.do_response(query=query)
+        finally:
+            self.responding.clear()
+
+    def clear_detect(self, conversation=None, wakeup_event: bool = True,
+                     **kwargs):
+        if self.listening.is_set() or self.querying.is_set():
+            return
+        self.detect_queue.clear()
+        self.listen_data.clear()
+        self.query_data.clear()
+        self.querying.set()
+        self.listening.set()
+        if wakeup_event:
+            self.on_wakeup(conversation=conversation)
+
+    def clear_listening(self, clear_data: bool = False):
+        self.listening.clear()
+        if clear_data:
+            self.listen_data.clear()
+
+    def clear_querying(self, clear_data: bool = False):
+        # 等待query_data数据
+        if self.listen_data and not self.query_data:
+            return
+        self.querying.clear()
+        if clear_data:
+            self.listen_data.clear()
+            self.query_data.clear()
+        self.responding.set()
+
+    def log_listen(self):
+        while self.flag_log.is_set():
+            logger.info("listen keywords: none=%s, detected=%s",
+                        self.log_listen_cnt, self.listening.is_set())
+            time.sleep(1)
+
+    def start_log(self):
+        if self.thread_log and self.thread_log.is_alive():
+            return
+        self.flag_log.set()
+        self.thread_log = ThreadManager.new(target=self.log_listen)
+        self.thread_log.start()
+
+    def stop_log(self):
+        self.flag_log.clear()
+        self.thread_log = None
+
+    def terminate(self):
+        self.running.clear()
+        self.need_query = False
+        self.query_data.clear()
+        self.listen_data.clear()
+        self.clear_detect(wakeup_event=False)
+
+    @abstractmethod
+    def get_key_words(self):
+        return list(self.keywords)
+
+    def set_volume_on_listen(self):
+        try:
+            while True:
+                self.listening.wait()
+                VolumeControl.set_volume(self.volume_min)
+                logger.debug("设置音量: %s", self.volume_min)
+                utils.wait_for(condition=lambda: not self.listening.is_set(),
+                               wait_once=0.5,
+                               limit=20)
+                VolumeControl.set_volume(self.volume_default)
+                logger.debug("恢复音量: %s", self.volume_default)
+        except:
+            logger.critical("音量设置错误.", exc_info=True)
+
+    def _init_infrared(self):
+        """实例化红外设备"""
+        enabled = config.get(item="/device/infrared/enabled", default=False)
+        if not enabled:
+            return None
+        port = config.get(item="/device/infrared/port", default="COM5")
+        device = InfraredDevice(port=port)
+        device.open()
+        device.detect_on(on_message=self._set_human_status)
+        return device
+
+    def _set_human_status(self, is_human: bool):
+        logger.debug("红外感应人体: %s", is_human)
+        if is_human and not self.human_ok.is_set():
+            self.human_ok.set()
+        elif not is_human and self.human_ok.is_set():
+            self.human_ok.clear()
+
+    def _append_text(self, text, end, conversation):
+        # 页面打断, 忽略打断前的内容
+        if end and conversation.in_break_time(self.interrupt_time):
+            conversation.clear_break_time()
+            return
+        # 消息输出
+        if self.listening.is_set() or self.querying.is_set():
+            self.sender.put_message(action=ACTION_USER_SPEAK,
+                                    data={"end": end},
+                                    message=text,
+                                    t=0)
+        # 聆听
+        if self.listening.is_set():
+            self.listen_data.append(text)
+        # 查询内容
+        if self.querying.is_set() and end:
+            self.query_data.append(text)
+            if not self.listening.is_set():
+                self.clear_querying()
+
+
+class RealtimeListener:
+    def __init__(self, **kwargs):
+        self.thread_asr: Optional[threading.Thread] = None
+        self.thread_audio: Optional[threading.Thread] = None
+        self.running = threading.Event()
+        # 获取配置
+        self.rec_seconds = config.get(item="/realtime/rec_seconds", default=5)
+        self.db_threshold = config.get(item="/realtime/db_threshold", default=37.5)
+        self.chunk_time = config.get(item="/realtime/chunk_time", default=100)
+        # 实例化RTAsr
+        self.rt_asr_conn = None
+        self.rt_asr_conn_ok = threading.Event()
+        self.rt_asr = self._init_asr()
+        self.interval_time = self.chunk_time / 1000.0
+
+    def _init_asr(self):
+        """实例化RTAsr"""
+        rt_engine = config.get(item="/realtime/engine", default="funasr")
+        rt_settings = config.get(item=f"/{rt_engine}", default={})
+        return RTAsr.get_rtasr_by_slug(slug=rt_engine,
+                                       chunk_time=self.chunk_time,
+                                       **rt_settings)
+
+    def start(self, on_message, on_voice=None):
+        self.running.set()
+        # 连接ASR
+        self.thread_asr = ThreadManager.new(target=self.run_asr_forever,
+                                            kwargs=dict(on_message=on_message))
+        self.thread_asr.start()
+        # 启动声音监听
+        self.thread_audio = ThreadManager.new(target=self.record_audio,
+                                              kwargs=dict(on_voice=on_voice))
+        self.thread_audio.start()
+
+    def stop(self):
+        # 关闭声音监听
+        self.running.clear()
+        # 关闭asr
+        self.rt_asr.stop(conn=self.rt_asr_conn)
+
+    def join(self, timeout=None):
+        self.thread_asr.join(timeout=timeout)
+        self.thread_audio.join(timeout=timeout)
+
+    def record_audio(self, on_voice=None):
+        import pyaudio
+        rate = 16000
+        channel = 1
+        chunk = int(rate * 2 * channel * self.chunk_time / 1000)
+        # frames = int(rate / 1000 * chunk)
+        frames = 4096
+
+        p = pyaudio.PyAudio()
+
+        stream = p.open(format=pyaudio.paInt16,
+                        channels=channel,
+                        rate=rate,
+                        input=True,
+                        frames_per_buffer=frames)
+        # 发送语音前, 要先发送MetaInfo
+        while self.running.is_set():
+            # last_time = time.time()
+            data = stream.read(chunk)
+            try:
+                if on_voice:
+                    on_voice(data)
+                if self.is_asr_ok():  # asr已连接
+                    self.rt_asr.send_voice(conn=self.rt_asr_conn, data=data)
+            except:
+                logger.critical("语音识别异常.", exc_info=True)
+            # db = self.calculate_db(data=data)
+            # # 开始请求
+            # if db > self.db_threshold:
+            #     logger.info(msg=f"录音分贝: {db}")
+            #     self.rt_asr.send_voice(conn=self.rt_asr_conn, data=data)
+            #     self.record_and_send(stream=stream, rate=rate, 
+            #                         chunk=chunk, seconds=self.rec_seconds)
+            # 计算休眠时间
+            # interval_time = self.sleep_time(last_time=last_time)
+            # if interval_time <= 0:
+            #     interval_time = self.interval_time
+            time.sleep(self.interval_time)
+        # send final
+        if self.is_asr_ok():
+            self.rt_asr.send_meta(conn=self.rt_asr_conn, is_speaking=False)
+
+    def sleep_time(self, last_time: float) -> float:
+        """音频块时长"""
+        return self.interval_time - time.time() + last_time
+
+    # 计算分贝的函数
+    @classmethod
+    def calculate_db(cls, data):
+        # Assuming 16-bit signed integer audio
+        np_data = numpy.frombuffer(buffer=data, dtype=numpy.int16)
+        # rms = math.sqrt(sum([x**2 for x in data])/len(data))
+        rms = numpy.sqrt(numpy.mean(np_data ** 2))
+        if rms <= 0:
+            return 0
+        # db = 20 * math.log10(rms)
+        return 20 * numpy.log10(rms)
+
+    @classmethod
+    def is_silent(cls, data: bytes):
+        return len(data) == data.count(b'\x00')
+
+    def record_and_send(self, stream, rate, chunk, seconds):
+        for _ in range(0, int(rate / chunk * seconds)):
+            data = stream.read(num_frames=chunk)
+            self.rt_asr.send_voice(conn=self.rt_asr_conn, data=data)
+
+    def is_asr_ok(self) -> bool:
+        return self.rt_asr_conn_ok.is_set()
+
+    def on_asr_open(self, ws):
+        self.rt_asr_conn_ok.set()
+        logger.info("Asr WebSocket Connection opened.")
+
+    def on_asr_close(self, ws, status, message):
+        self.rt_asr_conn_ok.clear()
+        logger.info("Asr WebSocket Connection closed, reconnect.")
+
+    def run_asr_forever(self, on_message):
+        while self.running.is_set():
+            self.rt_asr_conn = self.rt_asr.connect(on_message=on_message,
+                                                   on_open=self.on_asr_open,
+                                                   on_close=self.on_asr_close)
+            self.rt_asr.run(conn=self.rt_asr_conn)
+            self.rt_asr.stop(conn=self.rt_asr_conn)
+            time.sleep(5)
+
+
+def get_detector_by_slug(slug, **kwargs):
+    """
+    Returns:
+        A detector implementation available on the current platform
+    """
+    if not slug or type(slug) is not str:
+        raise TypeError("Invalid slug '%s'", slug)
+
+    selects = list(
+        filter(
+            lambda _cls: hasattr(_cls, "SLUG") and _cls.SLUG == slug, get_detectors()
+        )
+    )
+    if len(selects) == 0:
+        raise ValueError("No detector found for slug '%s'" % slug)
+    else:
+        if len(selects) > 1:
+            logger.warning(
+                "WARNING: Multiple detector found for slug '%s'. "
+                + "This is most certainly a bug." % slug
+            )
+        select = selects[0]
+        logger.info(f"使用 {select.SLUG} 关键词检测")
+        return select.get_instance(**kwargs)
+
+
+def get_detectors():
+    def get_subclasses(sub_cls):
+        subclasses = set()
+        for subclass in sub_cls.__subclasses__():
+            subclasses.add(subclass)
+            subclasses.update(get_subclasses(subclass))
+        return subclasses
+
+    return [
+        _cls
+        for _cls in list(get_subclasses(AbstractDetector))
+        if hasattr(_cls, "SLUG") and _cls.SLUG
+    ]

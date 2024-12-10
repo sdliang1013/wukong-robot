@@ -1,4 +1,4 @@
-wukong-robot
+octopus-robot
 ============
 
 .. toctree::
@@ -7,4 +7,4 @@ wukong-robot
    plugins
    robot
    snowboy
-   wukong
+   octopus

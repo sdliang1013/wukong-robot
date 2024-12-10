@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>robot.Updater &mdash; wukong-robot 1.2.0 文档</title>
+<title>robot.Updater &mdash; octopus-robot 1.2.0 文档</title>
   
 
   
@@ -49,7 +49,7 @@
           
 
           
-            <a href="../../index.html" class="icon icon-home"> wukong-robot
+            <a href="../../index.html" class="icon icon-home"> octopus-robot
           
 
           
@@ -93,7 +93,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../../index.html">wukong-robot</a>
+        <a href="../../index.html">octopus-robot</a>
         
       </nav>
 
@@ -154,8 +154,10 @@
 <span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
 
 <span class="n">_updater</span> <span class="o">=</span> <span class="kc">None</span>
-<span class="n">URL</span> <span class="o">=</span> <span class="s1">&#39;https://service-e32kknxi-1253537070.ap-hongkong.apigateway.myqcloud.com/release/wukong&#39;</span>
-<span class="n">DEV_URL</span> <span class="o">=</span> <span class="s1">&#39;https://service-e32kknxi-1253537070.ap-hongkong.apigateway.myqcloud.com/release/wukong-dev&#39;</span>
+<span class="n">URL</span> <span class="o">=</span> <span
+    class="s1">&#39;https://service-e32kknxi-1253537070.ap-hongkong.apigateway.myqcloud.com/release/octopus&#39;</span>
+<span class="n">DEV_URL</span> <span class="o">=</span> <span
+    class="s1">&#39;https://service-e32kknxi-1253537070.ap-hongkong.apigateway.myqcloud.com/release/octopus-dev&#39;</span>
 
 <div class="viewcode-block" id="Updater"><a class="viewcode-back" href="../../robot.html#robot.Updater.Updater">[文档]</a><span class="k">class</span> <span class="nc">Updater</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
@@ -181,20 +183,25 @@
         <span class="n">update_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fetch</span><span class="p">()</span>
         <span class="n">success</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="k">if</span> <span class="n">update_info</span> <span class="o">==</span> <span class="p">{}:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;恭喜你，wukong-robot 已经是最新！&#39;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span
+                class="s1">&#39;恭喜你，octopus-robot 已经是最新！&#39;</span><span class="p">)</span>
         <span class="k">if</span> <span class="s1">&#39;main&#39;</span> <span class="ow">in</span> <span class="n">update_info</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pull</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">APP_PATH</span><span class="p">,</span> <span class="n">update_info</span><span class="p">[</span><span class="s1">&#39;main&#39;</span><span class="p">][</span><span class="s1">&#39;version&#39;</span><span class="p">])</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pip</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">APP_PATH</span><span class="p">):</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;wukong-robot 更新成功！&#39;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span
+                    class="s1">&#39;octopus-robot 更新成功！&#39;</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">update_info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;main&#39;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;wukong-robot 更新失败！&#39;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span
+                    class="s1">&#39;octopus-robot 更新失败！&#39;</span><span class="p">)</span>
                 <span class="n">success</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="s1">&#39;contrib&#39;</span> <span class="ow">in</span> <span class="n">update_info</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pull</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">CONTRIB_PATH</span><span class="p">,</span> <span class="n">update_info</span><span class="p">[</span><span class="s1">&#39;contrib&#39;</span><span class="p">][</span><span class="s1">&#39;version&#39;</span><span class="p">])</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pip</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">CONTRIB_PATH</span><span class="p">):</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;wukong-contrib 更新成功！&#39;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span
+                    class="s1">&#39;octopus-contrib 更新成功！&#39;</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">update_info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;contrib&#39;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;wukong-contrib 更新失败！&#39;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span
+                    class="s1">&#39;octopus-contrib 更新失败！&#39;</span><span class="p">)</span>
                 <span class="n">success</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">return</span> <span class="n">success</span></div>
 

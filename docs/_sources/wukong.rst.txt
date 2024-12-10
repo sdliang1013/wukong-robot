@@ -1,7 +1,7 @@
-wukong module
+octopus module
 =============
 
-.. automodule:: wukong
+.. automodule:: octopus
     :members:
     :undoc-members:
     :show-inheritance:

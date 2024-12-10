@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>robot.statistic &mdash; wukong-robot 1.2.0 文档</title>
+  <title>robot.statistic &mdash; octopus-robot 1.2.0 文档</title>
   
 
   
@@ -49,7 +49,7 @@
           
 
           
-            <a href="../../index.html" class="icon icon-home"> wukong-robot
+            <a href="../../index.html" class="icon icon-home"> octopus-robot
           
 
           
@@ -93,7 +93,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../../index.html">wukong-robot</a>
+          <a href="../../index.html">octopus-robot</a>
         
       </nav>
 
@@ -169,7 +169,13 @@
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">persona</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;robot_name_cn&quot;</span><span class="p">,</span> <span class="s1">&#39;孙悟空&#39;</span><span class="p">)</span>
                 <span class="n">url</span> <span class="o">=</span> <span class="s1">&#39;http://livecv.hahack.com:8022/statistic&#39;</span>
-                <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">),</span> <span class="s1">&#39;uuid&#39;</span><span class="p">:</span> <span class="n">getUUID</span><span class="p">(),</span> <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">persona</span><span class="p">,</span> <span class="s1">&#39;project&#39;</span><span class="p">:</span> <span class="s1">&#39;wukong&#39;</span><span class="p">}</span>
+                <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span><span
+                  class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span
+                  class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">),</span> <span
+                  class="s1">&#39;uuid&#39;</span><span class="p">:</span> <span class="n">getUUID</span><span class="p">(),</span>
+                <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">persona</span><span class="p">,</span>
+                <span class="s1">&#39;project&#39;</span><span class="p">:</span> <span class="s1">&#39;octopus&#39;</span><span
+                  class="p">}</span>
                 <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
                 <span class="k">return</span></div></div>

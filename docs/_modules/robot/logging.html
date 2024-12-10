@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>robot.logging &mdash; wukong-robot 1.2.0 文档</title>
+  <title>robot.logging &mdash; octopus-robot 1.2.0 文档</title>
   
 
   
@@ -49,7 +49,7 @@
           
 
           
-            <a href="../../index.html" class="icon icon-home"> wukong-robot
+            <a href="../../index.html" class="icon icon-home"> octopus-robot
           
 
           
@@ -93,7 +93,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../../index.html">wukong-robot</a>
+          <a href="../../index.html">octopus-robot</a>
         
       </nav>
 
@@ -198,7 +198,14 @@
     <span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
     
     <span class="c1"># FileHandler</span>
-    <span class="n">file_handler</span> <span class="o">=</span> <span class="n">RotatingFileHandler</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">TEMP_PATH</span><span class="p">,</span> <span class="s1">&#39;wukong.log&#39;</span><span class="p">),</span> <span class="n">maxBytes</span><span class="o">=</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span><span class="p">,</span><span class="n">backupCount</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+    <span class="n">file_handler</span> <span class="o">=</span> <span class="n">RotatingFileHandler</span><span
+      class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span
+      class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">constants</span><span
+      class="o">.</span><span class="n">TEMP_PATH</span><span class="p">,</span> <span
+      class="s1">&#39;octopus.log&#39;</span><span class="p">),</span> <span class="n">maxBytes</span><span
+      class="o">=</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span><span
+      class="p">,</span><span class="n">backupCount</span><span class="o">=</span><span class="mi">5</span><span
+      class="p">)</span>
     <span class="n">file_handler</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
     <span class="n">file_handler</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">formatter</span><span class="p">)</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">file_handler</span><span class="p">)</span>
@@ -212,7 +219,10 @@
 <span class="sd">    :param lines: 最大的行数</span>
 <span class="sd">    :returns: 最新指定行数的 log</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">log_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">TEMP_PATH</span><span class="p">,</span> <span class="s1">&#39;wukong.log&#39;</span><span class="p">)</span>
+    <span class="n">log_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span
+      class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span
+      class="n">constants</span><span class="o">.</span><span class="n">TEMP_PATH</span><span class="p">,</span> <span
+      class="s1">&#39;octopus.log&#39;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">log_path</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">tail</span><span class="p">(</span><span class="n">log_path</span><span class="p">,</span> <span class="n">lines</span><span class="p">)</span>
     <span class="k">return</span> <span class="s1">&#39;&#39;</span></div>

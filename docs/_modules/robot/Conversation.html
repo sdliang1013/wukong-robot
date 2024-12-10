@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>robot.Conversation &mdash; wukong-robot 1.2.0 文档</title>
+<title>robot.Conversation &mdash; octopus-robot 1.2.0 文档</title>
   
 
   
@@ -49,7 +49,7 @@
           
 
           
-            <a href="../../index.html" class="icon icon-home"> wukong-robot
+            <a href="../../index.html" class="icon icon-home"> octopus-robot
           
 
           
@@ -93,7 +93,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../../index.html">wukong-robot</a>
+        <a href="../../index.html">octopus-robot</a>
         
       </nav>
 
@@ -353,7 +353,12 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">silent</span><span class="p">:</span>
                 <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
                 <span class="n">Player</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">getData</span><span class="p">(</span><span class="s1">&#39;beep_hi.wav&#39;</span><span class="p">))</span>
-            <span class="n">listener</span> <span class="o">=</span> <span class="n">snowboydecoder</span><span class="o">.</span><span class="n">ActiveListener</span><span class="p">([</span><span class="n">constants</span><span class="o">.</span><span class="n">getHotwordModel</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hotword&#39;</span><span class="p">,</span> <span class="s1">&#39;wukong.pmdl&#39;</span><span class="p">))])</span>
+            <span class="n">listener</span> <span class="o">=</span> <span class="n">snowboydecoder</span><span
+                class="o">.</span><span class="n">ActiveListener</span><span class="p">([</span><span
+                class="n">constants</span><span class="o">.</span><span class="n">getHotwordModel</span><span
+                class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span
+                class="p">(</span><span class="s1">&#39;hotword&#39;</span><span class="p">,</span> <span
+                class="s1">&#39;octopus.pmdl&#39;</span><span class="p">))])</span>
             <span class="n">voice</span> <span class="o">=</span> <span class="n">listener</span><span class="o">.</span><span class="n">listen</span><span class="p">(</span>
                 <span class="n">silent_count_threshold</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;silent_threshold&#39;</span><span class="p">,</span> <span class="mi">15</span><span class="p">),</span>
                 <span class="n">recording_timeout</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;recording_timeout&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span> <span class="o">*</span> <span class="mi">4</span>

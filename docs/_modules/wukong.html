@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>wukong &mdash; wukong-robot 1.2.0 文档</title>
+<title>octopus &mdash; octopus-robot 1.2.0 文档</title>
   
 
   
@@ -49,7 +49,7 @@
           
 
           
-            <a href="../index.html" class="icon icon-home"> wukong-robot
+            <a href="../index.html" class="icon icon-home"> octopus-robot
           
 
           
@@ -93,7 +93,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">wukong-robot</a>
+        <a href="../index.html">octopus-robot</a>
         
       </nav>
 
@@ -126,7 +126,7 @@
         
           <li><a href="index.html">模块代码</a> &raquo;</li>
         
-      <li>wukong</li>
+    <li>octopus</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -141,7 +141,9 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <h1>wukong 源代码</h1><div class="highlight"><pre>
+<h1>octopus 源代码</h1>
+<div class="highlight">
+    <pre>
 <span></span><span class="c1"># -*- coding: utf-8-*-</span>
 <span class="kn">from</span> <span class="nn">snowboy</span> <span class="k">import</span> <span class="n">snowboydecoder</span>
 <span class="kn">from</span> <span class="nn">robot</span> <span class="k">import</span> <span class="n">config</span><span class="p">,</span> <span class="n">utils</span><span class="p">,</span> <span class="n">constants</span><span class="p">,</span> <span class="n">logging</span><span class="p">,</span> <span class="n">statistic</span><span class="p">,</span> <span class="n">Player</span>
@@ -160,20 +162,24 @@
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<div class="viewcode-block" id="Wukong"><a class="viewcode-back" href="../wukong.html#wukong.Wukong">[文档]</a><span class="k">class</span> <span class="nc">Wukong</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus"><a class="viewcode-back" href="../octopus.html#octopus.Octopus">[文档]</a><span
+        class="k">class</span> <span class="nc">Octopus</span><span class="p">(</span><span
+        class="nb">object</span><span class="p">):</span>
 
     <span class="n">_profiling</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">_dev</span> <span class="o">=</span> <span class="kc">False</span>
     
-<div class="viewcode-block" id="Wukong.init"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.init">[文档]</a>    <span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.init"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.init">[文档]</a> <span class="k">def</span> <span
+        class="nf">init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">global</span> <span class="n">conversation</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">detector</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_interrupted</span> <span class="o">=</span> <span class="kc">False</span>        
         <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;&#39;&#39;</span>
 <span class="s1">********************************************************</span>
-<span class="s1">*          wukong-robot - 中文语音对话机器人           *</span>
+<span class="s1">* octopus-robot - 中文语音对话机器人 *</span>
 <span class="s1">*          (c) 2019 潘伟洲 &lt;m@hahack.com&gt;              *</span>
-<span class="s1">*     https://github.com/wzpan/wukong-robot.git        *</span>
+<span class="s1">* https://github.com/wzpan/octopus-robot.git *</span>
 <span class="s1">********************************************************</span>
 
 <span class="s1">            如需退出，可以按 Ctrl-4 组合键。</span>
@@ -221,7 +227,10 @@
     <span class="k">def</span> <span class="nf">_interrupt_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_interrupted</span>
 
-<div class="viewcode-block" id="Wukong.run"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.run">[文档]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.run"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.run">[文档]</a>
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span
+        class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">init</span><span class="p">()</span>
 
         <span class="c1"># capture SIGINT signal, e.g., Ctrl+C</span>
@@ -238,17 +247,25 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;初始化离线唤醒功能失败&#39;</span><span class="p">)</span>
             <span class="k">pass</span></div>
 
-<div class="viewcode-block" id="Wukong.initDetector"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.initDetector">[文档]</a>    <span class="k">def</span> <span class="nf">initDetector</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.initDetector"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.initDetector">[文档]</a> <span class="k">def</span> <span
+        class="nf">initDetector</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">detector</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;/do_not_bother/hotword_switch&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
             <span class="n">models</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">constants</span><span class="o">.</span><span class="n">getHotwordModel</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hotword&#39;</span><span class="p">,</span> <span class="s1">&#39;wukong.pmdl&#39;</span><span class="p">)),</span>
+                <span class="n">constants</span><span class="o">.</span><span class="n">getHotwordModel</span><span
+                    class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span
+                    class="p">(</span><span class="s1">&#39;hotword&#39;</span><span class="p">,</span> <span
+                    class="s1">&#39;octopus.pmdl&#39;</span><span class="p">)),</span>
                 <span class="n">constants</span><span class="o">.</span><span class="n">getHotwordModel</span><span class="p">(</span><span class="n">utils</span><span class="o">.</span><span class="n">get_do_not_bother_on_hotword</span><span class="p">()),</span>
                 <span class="n">constants</span><span class="o">.</span><span class="n">getHotwordModel</span><span class="p">(</span><span class="n">utils</span><span class="o">.</span><span class="n">get_do_not_bother_off_hotword</span><span class="p">())</span>
             <span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">models</span> <span class="o">=</span> <span class="n">constants</span><span class="o">.</span><span class="n">getHotwordModel</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hotword&#39;</span><span class="p">,</span> <span class="s1">&#39;wukong.pmdl&#39;</span><span class="p">))</span>
+            <span class="n">models</span> <span class="o">=</span> <span class="n">constants</span><span class="o">.</span><span
+                class="n">getHotwordModel</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span
+                class="n">get</span><span class="p">(</span><span class="s1">&#39;hotword&#39;</span><span class="p">,</span> <span
+                class="s1">&#39;octopus.pmdl&#39;</span><span class="p">))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">detector</span> <span class="o">=</span> <span class="n">snowboydecoder</span><span class="o">.</span><span class="n">HotwordDetector</span><span class="p">(</span><span class="n">models</span><span class="p">,</span> <span class="n">sensitivity</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sensitivity&#39;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">))</span>
         <span class="c1"># main loop</span>
         <span class="k">try</span><span class="p">:</span>
@@ -268,18 +285,27 @@
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s1">&#39;离线唤醒机制初始化失败：</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="Wukong.md5"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.md5">[文档]</a>    <span class="k">def</span> <span class="nf">md5</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">password</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.md5"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.md5">[文档]</a>
+    <span class="k">def</span> <span class="nf">md5</span><span class="p">(</span><span class="bp">self</span><span
+        class="p">,</span> <span class="n">password</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">md5</span><span class="p">(</span><span class="n">password</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="Wukong.update"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.update">[文档]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.update"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.update">[文档]</a> <span class="k">def</span> <span
+        class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">updater</span> <span class="o">=</span> <span class="n">Updater</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">updater</span><span class="o">.</span><span class="n">update</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="Wukong.fetch"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.fetch">[文档]</a>    <span class="k">def</span> <span class="nf">fetch</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.fetch"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.fetch">[文档]</a> <span class="k">def</span> <span
+        class="nf">fetch</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">updater</span> <span class="o">=</span> <span class="n">Updater</span><span class="p">()</span>
         <span class="n">updater</span><span class="o">.</span><span class="n">fetch</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="Wukong.restart"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.restart">[文档]</a>    <span class="k">def</span> <span class="nf">restart</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.restart"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.restart">[文档]</a> <span class="k">def</span> <span
+        class="nf">restart</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s1">&#39;程序重启...&#39;</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
@@ -288,22 +314,28 @@
         <span class="n">python</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">executable</span>
         <span class="n">os</span><span class="o">.</span><span class="n">execl</span><span class="p">(</span><span class="n">python</span><span class="p">,</span> <span class="n">python</span><span class="p">,</span> <span class="o">*</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Wukong.profiling"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.profiling">[文档]</a>    <span class="k">def</span> <span class="nf">profiling</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.profiling"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.profiling">[文档]</a> <span class="k">def</span> <span
+        class="nf">profiling</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;性能调优&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_profiling</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="Wukong.dev"><a class="viewcode-back" href="../wukong.html#wukong.Wukong.dev">[文档]</a>    <span class="k">def</span> <span class="nf">dev</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Octopus.dev"><a class="viewcode-back"
+        href="../octopus.html#octopus.Octopus.dev">[文档]</a>
+    <span class="k">def</span> <span class="nf">dev</span><span class="p">(</span><span class="bp">self</span><span
+        class="p">):</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;使用测试环境&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_dev</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">run</span><span class="p">()</span></div></div>
 
 <span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="n">wukong</span> <span class="o">=</span> <span class="n">Wukong</span><span class="p">()</span>
-        <span class="n">wukong</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+        <span class="n">octopus</span> <span class="o">=</span> <span class="n">Octopus</span><span class="p">()</span>
+        <span class="n">octopus</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">fire</span><span class="o">.</span><span class="n">Fire</span><span class="p">(</span><span class="n">Wukong</span><span class="p">)</span>
+        <span class="n">fire</span><span class="o">.</span><span class="n">Fire</span><span class="p">(</span><span
+            class="n">Octopus</span><span class="p">)</span>
 
 </pre></div>
 

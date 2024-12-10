@@ -4,6 +4,6 @@ cd $(dirname $0)
 [[ -d ".venv" ]] && source .venv/bin/activate
 export PYTHONPATH=$PWD
 
-ps aux|grep wukong|grep -v grep > /dev/null && ps -ef|grep wukong|grep -v grep|awk '{print $2}'|xargs kill
+ps aux|grep octopus|grep -v grep > /dev/null && ps -ef|grep octopus|grep -v grep|awk '{print $2}'|xargs kill
 
-nohup python3 -m chat_robot.wukong >/dev/null 2>&1 &
+nohup python3 -m octopus.app >/dev/null 2>&1 &

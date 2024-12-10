@@ -788,8 +788,7 @@ def test_speech():
         "完整句子后，"
         "调用合成引擎。"
     ]
-    credential = Credential(secret_id="secret_id",
-                            secret_key="secret_key")
+    credential = Credential(secret_id="secret_id", secret_key="secret_key")
     speech = SpeechSynthesizer(app_id="1305695723", credential=credential)
     speech.set_voice_type(301030)
     speech.set_codec("mp3")
@@ -815,8 +814,7 @@ def test_flow_speech():
         "完整句子后，"
         "调用合成引擎。"
     ]
-    credential = Credential(secret_id="secret_id",
-                            secret_key="secret_key")
+    credential = Credential(secret_id="secret_id", secret_key="secret_key")
     speech = FlowingSpeechSynthesizer(app_id="1305695723", credential=credential)
     speech.set_voice_type(301030)
     speech.set_codec("mp3")

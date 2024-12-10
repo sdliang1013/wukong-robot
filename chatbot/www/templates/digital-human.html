@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+{% block body %}
+<link rel="stylesheet" href="{{static_url('starter-template.css')}}" crossorigin="anonymous">
+
+<nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
+  <a class="navbar-brand" href="/">chat-robot</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault"
+    aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+    <ul class="navbar-nav mr-auto">
+      <li class="nav-item">
+        <a class="nav-link" href="/">会话</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/configpage">配置</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/logpage">日志</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/qa">QA集</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/api">API</a>
+      </li>
+      <li class="nav-item active">
+        <a class="nav-link" href="/digital-human">数字人</a>
+      </li>
+      <!-- <li class="nav-item">
+        <a class="nav-link" href="/donate">捐赠</a>
+      </li> -->
+    </ul>
+    <!-- <div class="form-inline my-2 my-lg-0">
+      <a class="btn btn-outline-success my-2 my-sm-0" href="https://chat.hahack.com" target="_blank">文档</a>
+    </div> -->
+  </div>
+</nav>
+
+<div class="container dh">
+  <div class="dh-info">
+    <span>当前会话ID：<input type="text" readonly value="{{session_id or ''}}" /></span>
+    <span>长连接状态：<input type="text" readonly value="{{'已连接' if cmd_status else '未连接'}}" /></span>
+    <span>直播流地址：<input type="text" readonly value="{{play_stream_addr or ''}}" /></span>
+  </div>
+  <div class="dh-btn">
+    <button type="button" class="btn btn-success mb-2" id="sessionList"><i class="fas fa-list"></i> 查询会话列表</button>
+    <button type="button" class="btn btn-success mb-2" id="sessionStatus"><i class="fas fa-heart"></i> 查询会话状态</button>
+    <button type="button" class="btn btn-primary mb-2" id="sessionCreate"><i class="fas fa-video"></i> 创建直播流</button>
+    <button type="button" class="btn btn-info mb-2" id="sessionOpen"><i class="fas fa-link"></i> 开启会话</button>
+    <button type="button" class="btn btn-danger mb-2" id="sessionClose"><i class="fas fa-unlink"></i> 关闭直播流</button>
+    <button type="button" class="btn btn-primary mb-2" id="cmdCreate">
+      <i class="fas fa-handshake"></i>
+      创建指令长链接
+    </button>
+  </div>
+  <div class="dh-output">
+    <label for="dh-textarea">响应报文</label>
+    <textarea rows="25" class="form-control" id="dh-textarea" placer='1' readonly></textarea>
+  </div>
+</div>
+
+
+<ul id="recorder" class="mfb-component--br mfb-zoomin" data-mfb-toggle="hover">
+  <li class="mfb-component__wrap">
+    <a href="#" id="record" class="mfb-component__button--main">
+      <i class="mfb-component__main-icon--resting fa fa-microphone"></i>
+      <i class="mfb-component__main-icon--active fa fa-times"></i>
+    </a>
+    <ul class="mfb-component__list">
+      <li>
+        <a href="#" id="stop-record" data-mfb-label="停止录制语音指令" class="mfb-component__button--child">
+          <i class="mfb-component__child-icon fas fa-stop"></i>
+        </a>
+      </li>
+      <li>
+        <a href="#" id="start-record" data-mfb-label="开始录制语音指令" class="mfb-component__button--child ">
+          <i class="mfb-component__child-icon fas fa-circle"></i>
+        </a>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+
+<script src="{{static_url('main.js')}}" crossorigin="anonymous"></script>
+<script src="{{static_url('dh.js')}}" crossorigin="anonymous"></script>
+<script src="./static/recorder.min.js"></script>
+{% end %}

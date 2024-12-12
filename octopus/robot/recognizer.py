@@ -62,15 +62,14 @@ class RealTimeRecognizer(AbstractRecongnizer):
         self.detect_end = True  # False-关键字并且online状态;True-关键字并且offline
         self.listen_data = list()  # 聆听内容
         self.query_data = list()  # 查询内容
-        self.chunk_time = config.get(item="/voice/chunk_time", default=100)
         self.keywords = dict(
             (kw, len(kw))
             for kw in config.get(item="/realtime/keywords", default=["你好", "小惠"])
         )
         self.interrupt_time = config.get("/realtime/interrupt_time", 1)
-        self.silent_threshold = config.get("silent_threshold", 20)
-        self.recording_threshold = config.get("recording_timeout", 100)
-        self.interval_time = self.chunk_time / 1000.0
+        self.silent_threshold = config.get("/realtime/silent_threshold", 1)
+        self.recording_threshold = config.get("recording_timeout", 20)
+        self.interval_time = config.get("/realtime/interval_time", 0.6)
         self.asr.add_handler(self._on_message)
 
     def start(self):
@@ -134,7 +133,6 @@ class RealTimeRecognizer(AbstractRecongnizer):
 
     def _listen_query(
         self,
-        interval_time: float = 0.05,
     ):
         """
         定时检查query内容
@@ -152,7 +150,7 @@ class RealTimeRecognizer(AbstractRecongnizer):
                 len_now = len(self.listen_data)
                 # 空内容
                 if len_now == 0:
-                    time.sleep(interval_time)
+                    time.sleep(self.interval_time)
                     continue
                 # 有内容, 判断静音阈值
                 if len_now and silent_count > self.silent_threshold:  # silence
@@ -161,7 +159,7 @@ class RealTimeRecognizer(AbstractRecongnizer):
                 if len_now <= len_last:
                     silent_count += 1
                 len_last = len_now
-                time.sleep(interval_time)
+                time.sleep(self.interval_time)
         except:
             logger.critical("数字人走神了.", exc_info=True)
             raise

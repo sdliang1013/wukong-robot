@@ -181,6 +181,7 @@ class VoiceAssistant(Robot):
         self.audio_queue.put(rec_data)
 
     def _on_detected_(self, from_status, to_status, event, **kwargs):
+        """ "检测结束"""
         self._log(from_status, to_status, event, **kwargs)
         # 中断
         # self.conversation.stop_response(**kwargs)
@@ -188,16 +189,19 @@ class VoiceAssistant(Robot):
         self.recognizer.listen(**kwargs)
 
     def _on_listened_(self, from_status, to_status, event, **kwargs):
+        """监听结束"""
         self._log(from_status, to_status, event, **kwargs)
         self.listener.resume_listen()
         self.recognizer.recognize(**kwargs)
 
     def _on_recognized_(self, from_status, to_status, event, **kwargs):
+        """识别结束"""
         self._log(from_status, to_status, event, **kwargs)
         self.detector.detect()
         self.agent.response(**kwargs)
 
     def _on_responded_(self, from_status, to_status, event, **kwargs):
+        """响应结束"""
         self._log(from_status, to_status, event, **kwargs)
 
     def _on_ctrl_wakeup_(self, from_status, to_status, event, **kwargs):

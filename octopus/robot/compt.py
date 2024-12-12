@@ -7,7 +7,7 @@ import time
 from collections import deque
 from ctypes import cast, POINTER
 from enum import Enum
-from typing import List, Tuple, Dict, Optional
+from typing import Callable, List, Tuple, Dict, Optional
 
 import serial
 
@@ -454,13 +454,93 @@ class Robot(object):
         pass
 
 
+class TimeoutMonitor:
+
+    def __init__(self):
+        self.data_dict = dict()
+        self.key_list = list()
+        self.running = threading.Event()  # 运行标识
+        self.not_none = threading.Event()  # 非空标记
+        self.changed = threading.Event()  # 改变标记
+        self.lock = threading.Lock()
+        self.interval_time = 0.01
+
+    def start(self):
+        self.running.set()
+        ThreadManager.new(target=self._run).start()
+
+    def stop(self):
+        self.running.clear()
+        self.not_none.set()
+
+    def put(self, key: str, timeout: float, handle: Callable):
+        end_time = time.time() + timeout
+        with self.lock:
+            # 清理
+            if key in self.key_list:
+                self.key_list.remove(key)
+            # 更新dict
+            self.data_dict[key] = (end_time, handle)
+            # 按时间先后写入队列
+            idx = len(self.key_list)
+            for i, k in enumerate(self.key_list):
+                end_k, _ = self.data_dict.get(k)
+                if end_k > end_time:
+                    idx = i
+                    break
+            self.key_list.insert(idx, key)
+            # 状态设置
+            self.changed.set()
+            self.not_none.set()
+
+    def pop(self, key: str):
+        with self.lock:
+            if key in self.key_list:
+                self.key_list.remove(key)
+            # 状态设置
+            if self.data_dict.pop(key, None):
+                self.changed.set()
+            if not self.key_list:
+                self.not_none.clear()
+
+    def _run(self):
+        while self.running.is_set():
+            self.not_none.wait()
+            self.changed.clear()
+            # 判断队列非空
+            if not self.key_list:
+                continue
+            # 检查第一个timeout
+            key = self.key_list[0]
+            end_time, handle = self.data_dict.get(key, (None, None))
+            # 空处理
+            if not end_time:
+                self.pop(key=key)
+                continue
+            timeout = self._check_timeout(end_time=end_time)
+            if timeout:
+                ThreadManager.new(target=handle).start()  # 执行处理
+                self.pop(key=key)  # 移除已处理的项
+
+    def _check_timeout(self, end_time: time) -> bool:
+        while self.running.is_set():
+            # 如果队列改变, 重新检查
+            if self.changed.is_set():
+                return False
+            # 超时
+            if time.time() > end_time:
+                return True
+            time.sleep(self.interval_time)
+        return False
+
+
 class ByteBuffer(object):
     """Ring buffer to hold audio from PortAudio"""
 
     def __init__(self, size=1024):
         self._buf = collections.deque(maxlen=size)
 
-    def extend(self, data: bytes):
+    def extend(self, data):
         """Adds data to the end of buffer"""
         self._buf.extend(data)
 
@@ -470,12 +550,18 @@ class ByteBuffer(object):
         self._buf.clear()
         return tmp
 
+    def clear(self):
+        """clear data"""
+        self._buf.clear()
+
 
 if __name__ == "__main__":
-    device = InfraredDevice(port="COM5")
-    device.open()
-    device.detect_on(on_message=lambda s: print("检测到人体: ", s))
+    monitor = TimeoutMonitor()
+    monitor.start()
+    monitor.put("t1", 5, lambda: print(5))
+    monitor.put("t2", 4, lambda: print(4))
+    monitor.put("t3", 3, lambda: print(3))
+    time.sleep(2)
+    monitor.pop("t3")
     time.sleep(10)
-    device.detect_off()
-    time.sleep(1)
-    device.close()
+    monitor.stop()

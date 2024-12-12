@@ -14,6 +14,7 @@ from octopus.robot.assistant import VoiceAssistant
 from octopus.robot.Conversation import Conversation
 from octopus.robot.LifeCycleHandler import LifeCycleEvent, LifeCycleHandler
 from octopus.robot.Sender import WebSocketSender, ACTION_ROBOT_WRITE
+from octopus.robot.compt import TimeoutMonitor
 from octopus.robot.jobs import ScreenControlJob, ClearVoiceJob
 from octopus.robot.schedulers import DeferredScheduler
 from octopus.web import server
@@ -35,6 +36,7 @@ class Octopus(object):
         self.conversation = None
         self.life_cycle_handler = None
         self.scheduler = None
+        self.timeout_monitor = None
 
     def init(self):
         print(
@@ -55,6 +57,7 @@ class Octopus(object):
             )
         )
         self.gui = None
+        self.timeout_monitor = TimeoutMonitor()
         self.life_cycle_event = LifeCycleEvent()  # 生命周期事件
         self.sender = WebSocketSender()  # 信息发送
         self.conversation = Conversation(
@@ -66,9 +69,10 @@ class Octopus(object):
             conversation=self.conversation, sender=self.sender
         )
         self.life_cycle_event.set_handler(handler=self.life_cycle_handler)
-        self.robot = VoiceAssistant(octopus=self)
+        self.robot = VoiceAssistant(octopus=self, timeout_monitor=self.timeout_monitor)
         # do something
         self.init_jobs()
+        self.timeout_monitor.start()
         self.sender.start()
         self.robot.init()
         self.life_cycle_event.fire_event("init")
@@ -167,9 +171,14 @@ class Octopus(object):
         self.run()
 
     def stop(self):
-        self.scheduler and self.scheduler.stop()
-        self.sender and self.sender.stop()
-        self.robot and self.robot.stop()
+        if self.timeout_monitor:
+            self.timeout_monitor.stop()
+        if self.scheduler:
+            self.scheduler.stop()
+        if self.sender:
+            self.sender.stop()
+        if self.robot:
+            self.robot.stop()
 
 
 def main():

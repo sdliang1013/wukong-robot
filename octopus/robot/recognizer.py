@@ -117,7 +117,7 @@ class RealTimeRecognizer(AbstractRecongnizer):
         text = utils.stripStartPunc(text)
         logger.debug("%s: %s", "识别结果" if end else "实时内容", text)
         with self.msg_lock:
-            # 处理关键字所在的句子(去掉关键词之前的无效内容)
+            # 去掉关键词之前的无效内容(基于online和offline特性)
             if end and not self.detect_end:
                 self.detect_end = True
                 text = self._clear_kw(text=text)
@@ -191,7 +191,7 @@ class RealTimeRecognizer(AbstractRecongnizer):
         return text
 
     def _append_text(self, text, end):
-        # 页面打断, 忽略打断前的内容
+        # 页面打断, 忽略打断前的内容(基于online和offline特性)
         if end and self.conversation.in_break_time(self.interrupt_time):
             self.conversation.clear_break_time()
             return
@@ -201,6 +201,7 @@ class RealTimeRecognizer(AbstractRecongnizer):
         # 查询内容
         if end:
             self.query_data.append(text)
+            # 停止识别(基于online和offline特性)
             if not self.listening.is_set():
                 self._on_queried()
         # 消息输出

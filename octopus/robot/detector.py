@@ -91,21 +91,23 @@ class RealTimeDetector(AbstractDetector):
         if not self.detecting.is_set():
             return
         text = data.text
-        end = data.is_end
+        is_amend = data.is_amend
         # 空判断
         if not text:
             return
         text = utils.stripStartPunc(text)
-        logger.debug("%s: %s", "识别结果" if end else "实时内容", text)
+        logger.debug("%s: %s", "识别结果" if is_amend else "实时内容", text)
         with self.msg_lock:
             # 关键字检测
-            ok, text = self._detect_message(text=text, end=end)
+            ok, text = self._detect_message(text=text, is_amend=is_amend)
             if ok:
-                self._on_detected(text=text, end=end)
+                self._on_detected(text=text, end=is_amend)
+            elif is_amend:  # 结束识别(避免FunAsr-CPU100%)
+                self.asr.send_meta(is_speaking=False)
 
-    def _detect_message(self, text: str, end: bool) -> Tuple[bool, str]:
+    def _detect_message(self, text: str, is_amend: bool) -> Tuple[bool, str]:
         content = text
-        if not end:
+        if not is_amend:
             self.detect_queue.enqueue(text)
             content = "".join(self.detect_queue.all())
         return self._detect_words(text=content)
@@ -145,10 +147,11 @@ def get_detector_by_slug(slug, **kwargs) -> AbstractDetector:
         if len(selects) > 1:
             logger.warning(
                 "WARNING: Multiple detector found for slug '%s'. "
-                + "This is most certainly a bug." % slug
+                + "This is most certainly a bug.",
+                slug,
             )
         select = selects[0]
-        logger.info(f"使用 {select.SLUG} 关键词检测")
+        logger.info("使用 %s 关键词检测", select.SLUG)
         return select.get_instance(**kwargs)
 
 

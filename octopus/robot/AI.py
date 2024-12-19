@@ -530,7 +530,7 @@ class FastGPTRobot(AbstractRobot):
         """
         FastGPT机器人
         """
-        super(self.__class__, self).__init__()
+        super(FastGPTRobot, self).__init__()
         if not api_key:
             api_key = os.getenv("FASTGPT_API_KEY")
         self.api_key = api_key
@@ -564,7 +564,7 @@ class FastGPTRobot(AbstractRobot):
         msg = "".join(texts)
         msg = utils.stripEndPunc(msg)
         msg = self.prefix + msg  # 增加一段前缀
-        logger.info("msg: " + msg)
+        logger.info("msg: %s", msg)
 
         dict_msg = {"role": "user", "content": msg}
         if data_id:  # req数据ID
@@ -581,7 +581,7 @@ class FastGPTRobot(AbstractRobot):
         if vars:  # 变量
             data.update(variables=vars)
 
-        logger.info(f"使用 FastGPT 开始流式请求")
+        logger.debug("使用 FastGPT 开始流式请求")
         url = self.api_base + "/api/v1/chat/completions"
         # 请求接收流式数据
         try:

@@ -18,9 +18,9 @@ logger = log.getLogger(__name__)
 
 class AsrResponse:
 
-    def __init__(self, text: str, is_end: bool = False, seq=None, **kwargs):
+    def __init__(self, text: str, is_amend: bool = False, seq=None, **kwargs):
         self.text = text
-        self.is_end = is_end
+        self.is_amend = is_amend
         self.seq = seq
 
 
@@ -148,7 +148,7 @@ class FunRTAsr(AbstractRTAsr):
             # 封装成统一格式
             on_message(
                 AsrResponse(
-                    text=data.get("text", None), is_end=data["mode"] == "2pass-offline"
+                    text=data.get("text", None), is_amend=data["mode"] == "2pass-offline"
                 )
             )
 
@@ -288,7 +288,7 @@ class VolcengineRTAsr(AbstractRTAsr):
                     text=data.get("payload_msg", {})
                     .get("result", {})
                     .get("text", None),
-                    is_end=self.only_end or data.get("is_last_package", False),
+                    is_amend=self.only_end or data.get("is_last_package", False),
                     seq=data.get("payload_sequence", None),
                 )
             )

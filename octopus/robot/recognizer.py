@@ -67,9 +67,9 @@ class RealTimeRecognizer(AbstractRecongnizer):
             for kw in config.get(item="/realtime/keywords", default=["你好", "小惠"])
         )
         self.interrupt_time = config.get("/realtime/interrupt_time", 1)
-        self.silent_threshold = config.get("/realtime/silent_threshold", 1)
-        self.recording_threshold = config.get("recording_timeout", 20)
-        self.interval_time = config.get("/realtime/interval_time", 0.6)
+        self.silent_threshold = config.get("/realtime/silent_threshold", 7)
+        self.recording_threshold = config.get("/realtime/recording_timeout", 100)
+        self.interval_time = config.get(item="/voice/chunk_time", default=100) / 1000.0
         self.asr.add_handler(self._on_message)
 
     def start(self):
@@ -86,7 +86,7 @@ class RealTimeRecognizer(AbstractRecongnizer):
         # 处理 text 和 end
         self.detect_end = end
         if text:
-            self._append_text(text=text, end=end)
+            self._append_text(text=text, is_amend=end)
         # 开始聆听
         ThreadManager.new(target=self._run_listen).start()
         # 启动listen_query
@@ -109,20 +109,20 @@ class RealTimeRecognizer(AbstractRecongnizer):
         if not self.listening.is_set() and not self.recognizing.is_set():
             return
         text = data.text
-        end = data.is_end
+        is_amend = data.is_amend
         # 空判断
         if not text:
             return
         text = utils.stripStartPunc(text)
-        logger.debug("%s: %s", "识别结果" if end else "实时内容", text)
+        logger.debug("%s: %s", "识别结果" if is_amend else "实时内容", text)
         with self.msg_lock:
             # 去掉关键词之前的无效内容(基于online和offline特性)
-            if end and not self.detect_end:
+            if is_amend and not self.detect_end:
                 self.detect_end = True
                 text = self._clear_kw(text=text)
             # 附加查询内容
             if text:
-                self._append_text(text=text, end=end)
+                self._append_text(text=text, is_amend=is_amend)
 
     def _run_listen(self):
         while self.listening.is_set():
@@ -152,12 +152,14 @@ class RealTimeRecognizer(AbstractRecongnizer):
                 if len_now == 0:
                     time.sleep(self.interval_time)
                     continue
-                # 有内容, 判断静音阈值
-                if len_now and silent_count > self.silent_threshold:  # silence
+                # 判断静音阈值
+                if len_now and silent_count > self.silent_threshold:
                     return True
                 # 计算静音
                 if len_now <= len_last:
                     silent_count += 1
+                else:
+                    silent_count = 0
                 len_last = len_now
                 time.sleep(self.interval_time)
         except:
@@ -174,9 +176,17 @@ class RealTimeRecognizer(AbstractRecongnizer):
 
     def _on_queried(self, clear_data: bool = False):
         self.recognizing.clear()
-        self.bot.action(event=AssistantEvent.RECOGNIZED, query="".join(self.query_data))
+        query = "".join(self.query_data)
+        self.bot.action(event=AssistantEvent.RECOGNIZED, query=query)
         if clear_data:
             self.query_data.clear()
+        # 发送消息
+        self.sender.put_message(
+            action=ACTION_USER_SPEAK,
+            data={"end": True},
+            message=query,
+            t=0,
+        )
 
     def _clear_kw(
         self,
@@ -188,24 +198,24 @@ class RealTimeRecognizer(AbstractRecongnizer):
                 return utils.stripStartPunc(text[l_kw + idx :])
         return text
 
-    def _append_text(self, text, end):
+    def _append_text(self, text, is_amend):
         # 页面打断, 忽略打断前的内容(基于online和offline特性)
-        if end and self.conversation.in_break_time(self.interrupt_time):
+        if is_amend and self.conversation.in_break_time(self.interrupt_time):
             self.conversation.clear_break_time()
             return
-        # 聆听
-        if not end:
+        if not is_amend:  # 聆听内容
             self.listen_data.append(text)
-        # 查询内容
-        if end:
+            self.sender.put_message(
+                action=ACTION_USER_SPEAK,
+                data={"end": False},
+                message=text,
+                t=0,
+            )
+        else:  # 查询内容
             self.query_data.append(text)
             # 停止识别(基于online和offline特性)
             if not self.listening.is_set():
                 self._on_queried()
-        # 消息输出
-        self.sender.put_message(
-            action=ACTION_USER_SPEAK, data={"end": end}, message=text, t=0
-        )
 
 
 def get_recongnizer_by_slug(slug, **kwargs) -> AbstractRecongnizer:
@@ -227,10 +237,11 @@ def get_recongnizer_by_slug(slug, **kwargs) -> AbstractRecongnizer:
         if len(selects) > 1:
             logger.warning(
                 "WARNING: Multiple Recongnizer found for slug '%s'. "
-                + "This is most certainly a bug." % slug
+                + "This is most certainly a bug.",
+                slug,
             )
         select = selects[0]
-        logger.info(f"使用 {select.SLUG} 语音识别")
+        logger.info("使用 %s 语音识别", select.SLUG)
         return select.get_instance(**kwargs)
 
 

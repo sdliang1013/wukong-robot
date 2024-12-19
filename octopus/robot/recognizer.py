@@ -67,9 +67,9 @@ class RealTimeRecognizer(AbstractRecongnizer):
             for kw in config.get(item="/realtime/keywords", default=["你好", "小惠"])
         )
         self.interrupt_time = config.get("/realtime/interrupt_time", 1)
-        self.silent_threshold = config.get("/realtime/silent_threshold", 7)
-        self.recording_threshold = config.get("/realtime/recording_timeout", 100)
-        self.interval_time = config.get(item="/voice/chunk_time", default=100) / 1000.0
+        self.silent_threshold = config.get("/realtime/silent_threshold", 3)
+        self.recording_threshold = config.get("/realtime/recording_timeout", 50)
+        self.interval_time = config.get("/realtime/interval_time", 0.2)
         self.asr.add_handler(self._on_message)
 
     def start(self):

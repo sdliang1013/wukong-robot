@@ -89,7 +89,7 @@ class LifeCycleHandler(object):
             logger.warning("勿扰模式开启中")
             return
         if is_snowboy:
-            logger.info("开始录音")
+            logger.debug("开始录音")
             utils.setRecordable(True)
         if config.get("/LED/enable", False):
             LED.wakeup()
@@ -138,10 +138,10 @@ class LifeCycleHandler(object):
         """
         恢复沉浸式技能的状态
         """
-        logger.info("onRestore")
+        logger.debug("onRestore")
 
     def on_killed(self):
-        logger.info("onKill")
+        logger.debug("onKill")
         self._observer.stop()
 
     def _beep_hi(self, onCompleted=None, wait_seconds=None):

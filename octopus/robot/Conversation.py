@@ -208,7 +208,7 @@ class Conversation(object):
 
     def check_restore(self):
         if self.immersive_mode:
-            logger.info("处于沉浸模式，恢复技能")
+            logger.debug("处于沉浸模式，恢复技能")
             self.life_cycle_event.fire_event("restore")
             self.brain.restore()
 
@@ -330,7 +330,7 @@ class Conversation(object):
             for data in stream():
                 # 中断
                 if self.interrupted.is_set():
-                    logger.info("响应已经被中断....")
+                    logger.debug("响应已经被中断....")
                     return
                 data_list.append(data)
                 if self.on_stream:
@@ -349,7 +349,7 @@ class Conversation(object):
                         continue
                     # 检测中断again
                     if self.interrupted.is_set():
-                        logger.info("响应已经被中断....")
+                        logger.debug("响应已经被中断....")
                         return
                     audio = self.speaker.speak_in_order(
                         line=line, req_id=resp_uuid, index=index, cache=cache
@@ -705,7 +705,7 @@ class OrderSpeaker:
                 # 检测中断again
                 if with_interrupt and self.interrupted.is_set():
                     self.dh.interrupt(req_id=req_id)
-                    logger.info("Speak-DH被中断....")
+                    logger.debug("Speak-DH被中断....")
                     return
                 self._dh_in_order(msg=line, req_id=req_id, index=index, is_final=False)
                 index += 1
@@ -733,7 +733,7 @@ class OrderSpeaker:
                         # 检测中断again
                         if with_interrupt and self.interrupted.is_set():
                             canceled = True
-                            logger.info("Speak-TTS被中断....")
+                            logger.debug("Speak-TTS被中断....")
                             break
                         task = pool.submit(
                             self._tts_in_order,

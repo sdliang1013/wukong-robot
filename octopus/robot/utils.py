@@ -16,6 +16,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import yaml
+from pathtools import patterns
 from pydub import AudioSegment
 from pytz import timezone
 
@@ -293,13 +294,15 @@ def save_voice_cache(msg, ext, data, mode='w+b'):
 
 def clear_voice_cache(file, days):
     """清理最近未使用的缓存"""
+    time_limit = days * 86400
 
     def run(*args):
-        subprocess.run(
-            'find . -name "%s" -atime +%d -exec rm {} \\;' % (file, days),
-            cwd=constants.TEMP_PATH,
-            shell=True,
-        )
+        # 遍历目录, 删除缓存文件
+        for root, _, files in os.walk(constants.TEMP_PATH):
+            for f in files:
+                file_path = os.path.join(root, f)
+                if patterns.fnmatch(f, file) and (time.time() - os.path.getatime(file_path)) > time_limit:
+                    os.remove(file_path)
 
     thread.start_new_thread(run, ())
 

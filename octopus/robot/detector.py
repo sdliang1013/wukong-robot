@@ -90,12 +90,11 @@ class RealTimeDetector(AbstractDetector):
     def _on_message(self, data: RTAsr.AsrResponse, *args, **kwargs):
         if not self.detecting.is_set():
             return
-        text = data.text
-        is_amend = data.is_amend
         # 空判断
-        if not text:
+        if not data.text:
             return
-        text = utils.stripStartPunc(text)
+        text = utils.stripStartPunc(data.text)
+        is_amend = data.is_amend
         logger.debug("%s: %s", "识别结果" if is_amend else "实时内容", text)
         with self.msg_lock:
             # 关键字检测
@@ -151,7 +150,7 @@ def get_detector_by_slug(slug, **kwargs) -> AbstractDetector:
                 slug,
             )
         select = selects[0]
-        logger.info("使用 %s 关键词检测", select.SLUG)
+        logger.debug("使用 %s 关键词检测", select.SLUG)
         return select.get_instance(**kwargs)
 
 

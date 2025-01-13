@@ -78,7 +78,7 @@ class TulingRobot(AbstractRobot):
                     result += "\n".join(res["values"].values())
             else:
                 result = "图灵机器人服务异常，请联系作者"
-            logger.info(f"{self.SLUG} 回答：{result}")
+            logger.debug(f"{self.SLUG} 回答：{result}")
             return result
         except Exception:
             logger.critical(
@@ -111,7 +111,7 @@ class UnitRobot(AbstractRobot):
         msg = utils.stripEndPunc(msg)
         try:
             result = unit.getSay(parsed)
-            logger.info("{} 回答：{}".format(self.SLUG, result))
+            logger.debug("{} 回答：{}".format(self.SLUG, result))
             return result
         except Exception:
             logger.critical("UNIT robot failed to response for %r", msg, exc_info=True)
@@ -165,7 +165,7 @@ class BingRobot(AbstractRobot):
 
             result = asyncio.run(query_bing())
 
-            logger.info("{} 回答：{}".format(self.SLUG, result))
+            logger.debug("{} 回答：{}".format(self.SLUG, result))
             return result
         except Exception:
             logger.critical("bing robot failed to response for %r", msg, exc_info=True)
@@ -203,7 +203,7 @@ class AnyQRobot(AbstractRobot):
             url = f"http://{self.host}:{self.port}/anyq?question={msg}"
             r = requests.get(url)
             respond = json.loads(r.text)
-            logger.info(f"anyq response: {respond}")
+            logger.debug(f"anyq response: {respond}")
             if len(respond) > 0:
                 # 有命中，进一步判断 confidence 是否达到要求
                 confidence = respond[0]["confidence"]
@@ -212,7 +212,7 @@ class AnyQRobot(AbstractRobot):
                     answer = respond[0]["answer"]
                     if utils.validjson(answer):
                         answer = random.choice(json.loads(answer))
-                    logger.info(f"{self.SLUG} 回答：{answer}")
+                    logger.debug(f"{self.SLUG} 回答：{answer}")
                     return answer
             # 没有命中，走兜底
             if self.secondary != "null" and self.secondary:
@@ -300,7 +300,7 @@ class OPENAIRobot(AbstractRobot):
         msg = "".join(texts)
         msg = utils.stripEndPunc(msg)
         msg = self.prefix + msg  # 增加一段前缀
-        logger.info("msg: " + msg)
+        logger.debug("msg: " + msg)
         self.context.append({"role": "user", "content": msg})
 
         header = {
@@ -317,7 +317,7 @@ class OPENAIRobot(AbstractRobot):
             )
 
         data = {"model": self.model, "messages": self.context, "stream": True}
-        logger.info(f"使用模型：{self.model}，开始流式请求")
+        logger.debug(f"使用模型：{self.model}，开始流式请求")
         url = self.api_base + "/completions"
         if self.provider == "azure":
             url = f"{self.api_base}/openai/deployments/{self.model}/chat/completions?api-version={self.api_version}"
@@ -376,7 +376,7 @@ class OPENAIRobot(AbstractRobot):
         msg = "".join(texts)
         msg = utils.stripEndPunc(msg)
         msg = self.prefix + msg  # 增加一段前缀
-        logger.info("msg: " + msg)
+        logger.debug("msg: " + msg)
         try:
             respond = ""
             self.context.append({"role": "user", "content": msg})
@@ -460,7 +460,7 @@ class WenxinRobot(AbstractRobot):
                 }
             )
             response = requests.request("POST", wenxinurl, headers=headers)
-            logger.info(f"wenxin response: {response}")
+            logger.debug(f"wenxin response: {response}")
             return response.text
 
         except Exception:
@@ -506,7 +506,7 @@ class TongyiRobot(AbstractRobot):
                 messages=msg,
                 result_format="message",  # set the result to be "message" format.
             )
-            logger.info(f"tongyi response: {response}")
+            logger.debug(f"tongyi response: {response}")
             return response["output"]["choices"][0]["message"]["content"]
 
         except Exception:

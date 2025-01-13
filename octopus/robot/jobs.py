@@ -6,6 +6,7 @@ import datetime
 import dbus
 
 from octopus.robot import config, log, utils
+from octopus.robot.compt import ScreenControl
 from octopus.robot.schedulers import DeferredScheduler
 
 logger = log.getLogger(__name__)
@@ -56,8 +57,6 @@ class ScreenControlJob(ConfigJob):
         try:
             if self.is_on(now_time=now_time):
                 self.turn_on()  # 亮屏
-                time.sleep(5)
-                self.turn_on()  # 亮屏
             else:
                 self.turn_off()  # 息屏
         except:
@@ -77,27 +76,11 @@ class ScreenControlJob(ConfigJob):
 
     def turn_off(self):
         """关闭屏幕（息屏）"""
-        logger.info("执行任务: 关闭屏幕")
-        session_bus = dbus.SessionBus()
-        screensaver = session_bus.get_object(
-            bus_name="org.gnome.ScreenSaver", object_path="/org/gnome/ScreenSaver"
-        )
-        screensaver_iface = dbus.Interface(
-            object=screensaver, dbus_interface="org.gnome.ScreenSaver"
-        )
-        screensaver_iface.SetActive(True)  # 启动屏幕保护（息屏）
+        ScreenControl.turn_off()
 
     def turn_on(self):
         """打开屏幕（恢复亮屏）"""
-        logger.info("执行任务: 打开屏幕")
-        session_bus = dbus.SessionBus()
-        screensaver = session_bus.get_object(
-            bus_name="org.gnome.ScreenSaver", object_path="/org/gnome/ScreenSaver"
-        )
-        screensaver_iface = dbus.Interface(
-            object=screensaver, dbus_interface="org.gnome.ScreenSaver"
-        )
-        screensaver_iface.SetActive(False)  # 关闭屏幕保护（亮屏）
+        ScreenControl.turn_on()
 
     def toggle(self):
         session_bus = dbus.SessionBus()
@@ -125,4 +108,7 @@ class ClearVoiceJob(ConfigJob):
     def run_job(self):
         """清理缓存"""
         logger.info("执行任务: 清理音频文件")
-        utils.clear_voice_cache(file=self.file, days=self.days)
+        try:
+            utils.clear_voice_cache(file=self.file, days=self.days)
+        except:
+            logger.critical(msg="清理音频文件异常.", exc_info=True)

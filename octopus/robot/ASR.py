@@ -77,10 +77,10 @@ class AzureASR(AbstractASR):
 
         if ret.status_code == 200:
             res = ret.json()
-            logger.info(f"{self.SLUG} 语音识别到了：{res['DisplayText']}")
+            logger.debug(f"{self.SLUG} 语音识别到了：{res['DisplayText']}")
             return "".join(res["DisplayText"])
         else:
-            logger.info(f"{self.SLUG} 语音识别出错了: {res.text}")
+            logger.critical(f"{self.SLUG} 语音识别出错了: {res.text}")
             return ""
 
 
@@ -128,12 +128,12 @@ class BaiduASR(AbstractASR):
         res = self.client.asr(pcm, "pcm", 16000, {"dev_pid": self.dev_pid})
         res = res or dict(err_no=-1, err_msg="unknown")
         if res["err_no"] == 0:
-            logger.info(f"{self.SLUG} 语音识别到了：{res['result']}")
+            logger.debug(f"{self.SLUG} 语音识别到了：{res['result']}")
             return "".join(res["result"])
         else:
-            logger.info(f"{self.SLUG} 语音识别出错了: {res['err_msg']}")
+            logger.critical(f"{self.SLUG} 语音识别出错了: {res['err_msg']}")
             if res["err_msg"] == "request pv too much":
-                logger.info(
+                logger.critical(
                     "出现这个原因很可能是你的百度语音服务调用量超出限制，或未开通付费"
                 )
             return ""
@@ -209,7 +209,7 @@ class TencentASR(AbstractASR):
         recognizer.stop()
         # result
         text = "".join(listener.words)
-        logger.info(f"{self.SLUG} 语音识别到了：{text}")
+        logger.debug(f"{self.SLUG} 语音识别到了：{text}")
         return text
 
 
@@ -255,7 +255,7 @@ class AliASR(AbstractASR):
     def transcribe(self, fp):
         result = AliSpeech.asr(self.appKey, self.token, fp)
         if result:
-            logger.info(f"{self.SLUG} 语音识别到了：{result}")
+            logger.debug(f"{self.SLUG} 语音识别到了：{result}")
             return result
         else:
             logger.critical(f"{self.SLUG} 语音识别出错了", stack_info=True)
@@ -290,7 +290,7 @@ class WhisperASR(AbstractASR):
                 with open(fp, "rb") as f:
                     result = self.openai.Audio.transcribe("whisper-1", f)
                     if result:
-                        logger.info(f"{self.SLUG} 语音识别到了：{result.text}")
+                        logger.debug(f"{self.SLUG} 语音识别到了：{result.text}")
                         return result.text
             except Exception:
                 logger.critical(f"{self.SLUG} 语音识别出错了", stack_info=True)
@@ -317,7 +317,7 @@ class FunASR(AbstractASR):
     def transcribe(self, fp):
         result = self.engine(fp)
         if result:
-            logger.info(f"{self.SLUG} 语音识别到了：{result}")
+            logger.debug(f"{self.SLUG} 语音识别到了：{result}")
             return result
         else:
             logger.critical(f"{self.SLUG} 语音识别出错了", stack_info=True)

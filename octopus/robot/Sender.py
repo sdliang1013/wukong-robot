@@ -95,6 +95,7 @@ class WebSocketSender:
         self.running = threading.Event()
         self.queue_msg = queue.Queue()
         self.queue_lock = threading.Lock()
+        self.send_lock = threading.Lock()
         self.thread = None
 
     def send_message(
@@ -105,12 +106,13 @@ class WebSocketSender:
         resp_uuid=None,
         **kwargs
     ):
-        logger.info("机器人状态：%s", message)
+        logger.debug("机器人状态：%s", message)
         resp_uuid = resp_uuid or uuid.uuid4().hex
-        for _, client in enumerate(self.clients):
-            client.send_response(
-                resp_uuid=resp_uuid, action=action, data=data, message=message, **kwargs
-            )
+        with self.send_lock:
+            for _, client in enumerate(self.clients):
+                client.send_response(
+                    resp_uuid=resp_uuid, action=action, data=data, message=message, **kwargs
+                )
 
     def put_message(
         self,
@@ -120,12 +122,10 @@ class WebSocketSender:
         resp_uuid=None,
         **kwargs
     ):
-        self.queue_msg.put(
-            item=dict(
+        with self.queue_lock:
+            self.queue_msg.put(item=dict(
                 action=action, data=data, message=message, resp_uuid=resp_uuid, **kwargs
-            ),
-            timeout=3,
-        )
+            ), timeout=3)
 
     def clear_message(self):
         with self.queue_lock:

@@ -10,7 +10,7 @@ import time
 from contextlib import contextmanager
 from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
 
-from octopus.robot import log, utils
+from octopus.robot import log, utils, config
 from octopus.robot.compt import ThreadManager
 
 logger = log.getLogger(__name__)
@@ -92,6 +92,7 @@ class SoxPlayer(AbstractPlayer):
         self.playing_src = None
         self.playing_del = False
         self.empty_calls = []
+        self.audio_bin = self._get_audio_bin()
         # 创建一个锁用于保证同一时间只有一个音频在播放
         self.play_lock = threading.Lock()
         self.play_queue = self._init_queue()  # 播放队列
@@ -135,11 +136,7 @@ class SoxPlayer(AbstractPlayer):
                         utils.check_and_delete(src)
 
     def doPlay(self, src):
-        system = platform.system()
-        if system == "Darwin":
-            cmd = ["afplay", str(src)]
-        else:
-            cmd = ["play", str(src)]
+        cmd = [self.audio_bin, str(src)]
         logger.debug("Executing %s", " ".join(cmd))
         self.proc = subprocess.Popen(
             cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -203,6 +200,14 @@ class SoxPlayer(AbstractPlayer):
 
     def _init_queue(self):
         return queue.Queue()
+    
+    def _get_audio_bin(self) -> str:
+        audio_bin = config.get("audio_bin", None)
+        if audio_bin:
+            return audio_bin
+        if platform.system() == "Darwin":
+            return "afplay"
+        return "play"
 
 
 class MusicPlayer(SoxPlayer):

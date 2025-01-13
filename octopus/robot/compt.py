@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from abc import ABCMeta, abstractmethod
+import asyncio
 import collections
 import subprocess
 import threading
@@ -339,6 +340,54 @@ class ThreadManager:
             if t.is_alive():
                 t.join(timeout=timeout)
 
+class EventLoopManager:
+
+    def __init__(self):
+        self.thread = ThreadManager.new(target=self._run_forever)
+        self.loop = None
+
+    def create_task(self, coro, name=None):
+        if self._check_loop():
+            return self.loop.create_task(coro, name=name)
+
+    def call_soon(self, callback, *args, context=None):
+        if self._check_loop():
+            return self.loop.call_soon(callback, *args, context=context)
+
+    def call_soon_threadsafe(self, callback, *args, context=None):
+        if self._check_loop():
+            return self.loop.call_soon_threadsafe(callback, *args, context=context)
+
+    def run_in_executor(self, executor, func, *args):
+        if self._check_loop():
+            return self.loop.run_in_executor(executor, func, *args)
+
+    def start(self):
+        self.thread.start()
+
+    def stop(self):
+        self.call_soon_threadsafe(self._stop_loop)
+        while self.loop.is_running():
+            time.sleep(0.01)
+        self.loop.close()
+
+    def _run_forever(self):
+        try:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+            self.loop.run_forever()
+            logger.info("event loop stopped.")
+        except Exception as e:
+            logger.critical("EventLoop运行失败: %s", str(e), stack_info=True)
+
+    def _stop_loop(self, *args):
+        self.loop.stop()
+
+    def _check_loop(self) -> bool:
+        if not self.loop:
+            logger.error("event loop未初始化.")
+            return False
+        return True
 
 class InfraredDevice:
 
@@ -553,6 +602,242 @@ class ByteBuffer(object):
     def clear(self):
         """clear data"""
         self._buf.clear()
+
+class CsvData:
+    def __init__(self, split=None, cols=None, file=None, encoding=None):
+        """
+        @param split 分隔符
+        @param cols 列头
+        @param file 文件
+        @param encoding 编码
+        """
+        self.split = split or ','
+        self.quote = '"'
+        self.cols = cols
+        self.data = []
+        self._empty_line = ""  # 空行
+        if self.cols:
+            self._empty_line = "".join([self.split for _ in range(len(self.cols))])
+        # 加载数据
+        if file:
+            self.load(file=file, encoding=encoding)
+
+    def load(self, file: str, encoding=None):
+        utils.each_line(func=self._load_data, file=file, encoding=encoding or 'utf8')
+
+    def all(self, cols: list = None, order_by: str = None) -> list:
+        # 计算要获取的列下标
+        idx_cols = [i for i in range(len(self.cols))]
+        if cols:
+            idx_cols = self._col_index(cols=cols)
+        res = list(map(lambda row: self._to_dict(row=row, idx_cols=idx_cols), self.data))
+        # 排序
+        if order_by:
+            res.sort(key=lambda x: x.get(order_by, ""))
+        return res
+
+    def query(self, condition: dict, cols: list = None, order_by: str = None) -> list:
+        res = []
+        i_c_cond = self._cond_tuple(condition=condition)
+        # 计算要获取的列下标
+        idx_cols = [i for i in range(len(self.cols))]
+        if cols:
+            idx_cols = self._col_index(cols=cols)
+        for row in self.data:
+            if self._filter_tuple(row=row, i_c_cond=i_c_cond):
+                res.append(self._to_dict(row=row, idx_cols=idx_cols))
+        # 排序
+        if order_by:
+            res.sort(key=lambda x: x.get(order_by, ""))
+        return res
+
+    def clear_data(self):
+        self.data.clear()
+
+    def _load_data(self, line: str, idx: int):
+        # 空判断
+        if self._empty_row(line):
+            return
+        if idx == 0:  # 首行
+            if line[0] == '#':  # 加载列头(idx==0 and 以#字符开头)
+                self.cols = line[1:].strip().split(self.split)
+                self._empty_line = "".join([self.split for _ in range(len(self.cols))])
+            else:  # 加载数据
+                self.data.append(self._split_line(line=line.strip()))
+            if not self.cols:
+                raise RuntimeError("未指定列头")
+        else:  # 加载数据
+            self.data.append(self._split_line(line=line.strip()))
+
+    def _to_dict(self, row: list, idx_cols: list = None) -> dict:
+        """输出"""
+        row_len = len(row)
+        row_data = {}
+        for idx in idx_cols:
+            row_data.update({self.cols[idx]: row_len > idx and row[idx] or None})
+        return row_data
+
+    def _filter_dict(self, row: list, condition: dict) -> bool:
+        """
+        过滤行
+        @param condition {column: value}
+        """
+        for col, val in condition.items():
+            if col not in self.cols:
+                raise RuntimeError(f"无效的字段 {col}")
+            i = self.cols.index(col)
+            if len(row) <= i or row[i] != val:
+                return False
+        return True
+
+    @classmethod
+    def _filter_tuple(cls, row: list, i_c_cond: list) -> bool:
+        """
+        过滤行
+        @param i_c_cond [(index, value/Callable)]
+        """
+        for idx, val in i_c_cond:
+            if len(row) <= idx:  # 下标
+                return False
+            if isinstance(val, Callable):  # 函数
+                if not val(row[idx]):
+                    return False
+            elif row[idx] != val:  # 值比较
+                return False
+        return True
+
+    def _col_index(self, cols: list) -> list:
+        """列下标"""
+        idx_ary = []
+        for col in cols:
+            if col not in self.cols:
+                raise RuntimeError(f"无效的字段 {col}")
+            idx_ary.append(self.cols.index(col))
+        return idx_ary
+
+    def _cond_tuple(self, condition: dict) -> list:
+        """
+        查询条件下标
+        @return [(index, value)]
+        """
+        i_c_cond = []
+        for col, val in condition.items():
+            if val is None or val == "":
+                continue
+            if col not in self.cols:
+                raise RuntimeError(f"无效的字段 {col}")
+            i_c_cond.append((self.cols.index(col), val))
+        return i_c_cond
+
+    def _empty_row(self, row: str) -> bool:
+        return (not row) or row.strip() == self._empty_line
+
+    def _split_line(self, line: str) -> list:
+        """
+        分割一行数据(不考虑转义""的情况)
+        """
+        data = []
+        tmp = []
+        for c in line:
+            # 分割
+            if c == self.split:
+                # 以 " 开头
+                if tmp and tmp[0] == self.quote:
+                    # 必须以 " 结束
+                    if tmp[-1] != self.quote or len(tmp) < 2:
+                        tmp.append(c)
+                        continue
+                    # 掐头去尾
+                    tmp.pop(-1)
+                    tmp.pop(0)
+                data.append("".join(tmp))
+                tmp.clear()
+            else:
+                tmp.append(c)
+        # 判断"", 掐头去尾
+        if len(tmp) > 1 and tmp[0] == self.quote and tmp[-1] == self.quote:
+            tmp.pop(-1)
+            tmp.pop(0)
+        data.append("".join(tmp))
+        return data
+
+class ScreenControl:
+    HWND_BROADCAST = 0xffff
+    WM_SYSCOMMAND = 0x0112
+    SC_MONITORPOWER = 0xF170
+    monitor_power_off = 2
+    SW_SHOW = 5
+    ES_DEFAULT = 0x00000000
+    ES_CONTINUOUS = 0x00000008  # 防止系统睡眠
+    ES_SYSTEM_REQUIRED = 0x00000002  # 唤醒屏幕
+
+    @classmethod
+    def turn_on(cls):
+        """
+        :return:
+        """
+        if utils.is_linux():
+            cls._turn_on_linux()
+        elif utils.is_windows():
+            cls._turn_on_win()
+        else:
+            raise NotImplementedError()
+
+    @classmethod
+    def turn_off(cls):
+        """
+        :return:
+        """
+        if utils.is_linux():
+            cls._turn_off_linux()
+        elif utils.is_windows():
+            cls._turn_off_win()
+        else:
+            raise NotImplementedError()
+
+    @classmethod
+    def _turn_on_linux(cls):
+        """打开屏幕（恢复亮屏）"""
+        import dbus
+        logger.info("执行任务: 打开屏幕")
+        session_bus = dbus.SessionBus()
+        screensaver = session_bus.get_object(bus_name='org.gnome.ScreenSaver',
+                                             object_path='/org/gnome/ScreenSaver')
+        screensaver_iface = dbus.Interface(object=screensaver,
+                                           dbus_interface='org.gnome.ScreenSaver')
+        screensaver_iface.SetActive(False)  # 关闭屏幕保护（亮屏）
+
+    @classmethod
+    def _turn_off_linux(cls):
+        """关闭屏幕（息屏）"""
+        import dbus
+        logger.info("执行任务: 关闭屏幕")
+        session_bus = dbus.SessionBus()
+        screensaver = session_bus.get_object(bus_name='org.gnome.ScreenSaver',
+                                             object_path='/org/gnome/ScreenSaver')
+        screensaver_iface = dbus.Interface(object=screensaver,
+                                           dbus_interface='org.gnome.ScreenSaver')
+        screensaver_iface.SetActive(True)  # 启动屏幕保护（息屏）
+
+    @classmethod
+    def _turn_on_win(cls):
+        # 通过模拟按键唤醒
+        import pyautogui
+        pyautogui.moveTo(300, 0)
+        pyautogui.click()
+        pyautogui.press("enter")
+        # 设置系统状态，防止系统睡眠并唤醒屏幕
+        # import ctypes
+        # kernel32 = ctypes.windll.kernel32
+        # kernel32.SetThreadExecutionState(cls.ES_CONTINUOUS | cls.ES_SYSTEM_REQUIRED)
+
+    @classmethod
+    def _turn_off_win(cls):
+        import ctypes
+        user32 = ctypes.windll.user32
+        # 发送消息使屏幕关闭，参数2表示关闭显示器
+        user32.SendMessageW(cls.HWND_BROADCAST, cls.WM_SYSCOMMAND,
+                            cls.SC_MONITORPOWER, cls.monitor_power_off)
 
 
 if __name__ == "__main__":

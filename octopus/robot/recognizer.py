@@ -66,10 +66,10 @@ class RealTimeRecognizer(AbstractRecongnizer):
             (kw, len(kw))
             for kw in config.get(item="/realtime/keywords", default=["你好", "小惠"])
         )
-        self.interrupt_time = config.get("/realtime/interrupt_time", 1)
+        self.interrupt_time = config.get("/realtime/interrupt_time", 1000) / 1000
         self.silent_threshold = config.get("/realtime/silent_threshold", 3)
         self.recording_threshold = config.get("/realtime/recording_timeout", 50)
-        self.interval_time = config.get("/realtime/interval_time", 0.2)
+        self.interval_time = config.get("/realtime/interval_time", 200) / 1000
         self.asr.add_handler(self._on_message)
 
     def start(self):
@@ -116,13 +116,14 @@ class RealTimeRecognizer(AbstractRecongnizer):
         text = utils.stripStartPunc(text)
         logger.debug("%s: %s", "识别结果" if is_amend else "实时内容", text)
         with self.msg_lock:
+            real_text = text
             # 去掉关键词之前的无效内容(基于online和offline特性)
             if is_amend and not self.detect_end:
                 self.detect_end = True
-                text = self._clear_kw(text=text)
+                real_text = self._clear_kw(text=text)
             # 附加查询内容
-            if text:
-                self._append_text(text=text, is_amend=is_amend)
+            if real_text:
+                self._append_text(text=real_text, is_amend=is_amend)
 
     def _run_listen(self):
         while self.listening.is_set():

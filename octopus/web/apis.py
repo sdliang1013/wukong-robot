@@ -7,7 +7,7 @@ from octopus.robot.Sender import ACTION_USER_SPEAK
 from octopus.robot.enums import AssistantEvent, AssistantStatus
 from octopus.schemas.core import Response
 from octopus.web.core import BaseHandler, ApiBaseHandler
-from octopus.srv.navigation import OfficeService, DoctorService, FaqService
+from octopus.srv.navigation import FaqService
 
 logger = log.getLogger(__name__)
 
@@ -159,7 +159,7 @@ class HandControlHandler(BaseHandler):
 
     def initialize(self, **kwargs):
         super(HandControlHandler, self).initialize(**kwargs)
-        self.interrupt_time = config.get("/realtime/interrupt_time", 1)
+        self.interrupt_time = config.get("/realtime/interrupt_time", 1000) / 1000
 
     def get(self, action: str):
         if not self.valid_to_json():
@@ -175,7 +175,7 @@ class HandControlHandler(BaseHandler):
         if "wakeup" == action:
             self.wakeup_robot()
         elif "interrupt" == action:
-            self.interrupt_and_wakeup()
+            self.interrupt_robot()
         elif "interrupt-wakeup" == action:
             self.interrupt_and_wakeup()
         elif "sleep" == action:
@@ -256,12 +256,10 @@ class ChatApiHandler(ApiBaseHandler):
         """手动提交查询"""
         data = self.get_body_json()
         query = data.get("query", None)
-        query_type = data.get("query_type", None)
         req_uuid = data.get("uuid", uuid.uuid4().hex)
         if not query:
             return Response.error(code=1, message="query text is empty")
         else:
-            query = self._reset_query(query=query, query_type=query_type)
             self.octopus.sender.put_message(
                 action=ACTION_USER_SPEAK, data={"end": True}, message=query, t=0
             )
@@ -271,29 +269,7 @@ class ChatApiHandler(ApiBaseHandler):
             )
             return Response.ok()
 
-    @classmethod
-    def _reset_query(cls, query: str, query_type: str) -> str:
-        prefix = ""
-        suffix = ""
-        if query_type == "office":
-            prefix = config.get("/query/office/prefix", "")
-            suffix = config.get("/query/office/suffix", "怎么走")
-        elif query_type == "doctor":
-            prefix = config.get("/query/doctor/prefix", "")
-            suffix = config.get("/query/doctor/suffix", "的科室位置和排班信息")
-        return f"{prefix}{query}{suffix}"
-
-
 class NavigationHandler(ApiBaseHandler):
-
-    def get_office_list(self) -> list:
-        """科室列表"""
-        return office_service.office_all()
-
-    def get_doctor_list(self) -> dict:
-        """医生列表"""
-
-        return doctor_service.doctor_all()
 
     def get_faq_list(self) -> list:
         """问题列表"""
@@ -302,6 +278,4 @@ class NavigationHandler(ApiBaseHandler):
 
 
 # ------------------- init service ---------------------
-office_service = OfficeService(file=config.get("/navigation/office", "office.list"))
-doctor_service = DoctorService(file=config.get("/navigation/doctor", "doctor.list"))
 faq_service = FaqService(file=config.get("/navigation/faq", "faq.list"))

@@ -1,5 +1,5 @@
 function apiBase(uri){
-    return `/chat-robot/api${uri}`
+    return `/octopus/api${uri}`
 }
 /**
  * 查询会话列表

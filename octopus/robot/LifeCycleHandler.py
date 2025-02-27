@@ -58,7 +58,7 @@ class LifeCycleHandler(object):
 
     def on_init(self):
         """
-        chat-robot 初始化
+        octopus 初始化
         """
         config.init()
 

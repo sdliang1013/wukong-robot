@@ -4,7 +4,6 @@ from setuptools import setup, find_packages
 PKG_PATH = os.path.normpath(os.path.dirname(os.path.abspath(__file__)))
 
 # 版本
-app_version = "1.0.0"
 with open(file=os.path.join(PKG_PATH, "octopus", "VERSION"), mode="r") as fp:
     app_version = fp.read().strip()
 # 包
@@ -34,10 +33,10 @@ def _parse_requirements_file(requirements_file):
 
 
 setup(
-    name="chat-robot",
+    name="octopus",
     version=app_version,
     author="sdliang",
-    description="A Chat Robot",
+    description="A Octopus Robot",
     packages=pkgs,
     package_data=pkg_data,
     install_requires=_parse_requirements_file("requirements.txt"),

@@ -24,7 +24,7 @@ function refresh(msg) {
 }
 
 function apiBase(uri){
-    return `/chat-robot/api${uri}`
+    return `/octopus/api${uri}`
 }
 /**
  * 开启

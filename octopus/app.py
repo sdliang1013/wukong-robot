@@ -144,7 +144,7 @@ class Octopus(object):
 
     def restart(self):
         """
-        重启 chat-robot
+        重启 octopus
         """
         logger.info("程序重启...")
         try:

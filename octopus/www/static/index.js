@@ -100,7 +100,7 @@ function guid() {
 }
 
 function apiBase(uri){
-    return `/chat-robot/api${uri}`
+    return `/octopus/api${uri}`
 }
 
 function wakeup(){

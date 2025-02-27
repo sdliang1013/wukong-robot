@@ -138,7 +138,7 @@ class ApiBaseHandler(BaseHandler):
 
 
 def api_base(prefix: str) -> str:
-    base = config.get(item="/server/path", default="/chat-robot")
+    base = config.get(item="/server/path", default="/octopus")
     return rf"{base}/api{prefix}"
 
 

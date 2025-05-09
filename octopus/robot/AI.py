@@ -62,7 +62,7 @@ class TulingRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         try:
             url = "http://openapi.turingapi.com/openapi/api/v2"
             userid = str(get_mac())[:32]
@@ -108,7 +108,7 @@ class UnitRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         try:
             result = unit.getSay(parsed)
             logger.debug("{} 回答：{}".format(self.SLUG, result))
@@ -141,7 +141,7 @@ class BingRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         try:
             import asyncio, json
             from EdgeGPT.EdgeGPT import Chatbot, ConversationStyle
@@ -198,7 +198,7 @@ class AnyQRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         try:
             url = f"http://{self.host}:{self.port}/anyq?question={msg}"
             r = requests.get(url)
@@ -298,7 +298,7 @@ class OPENAIRobot(AbstractRobot):
         """
 
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         msg = self.prefix + msg  # 增加一段前缀
         logger.debug("msg: " + msg)
         self.context.append({"role": "user", "content": msg})
@@ -374,7 +374,7 @@ class OPENAIRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         msg = self.prefix + msg  # 增加一段前缀
         logger.debug("msg: " + msg)
         try:
@@ -441,7 +441,7 @@ class WenxinRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         wenxinurl = f"https://aip.baidubce.com/oauth/2.0/token?client_id={self.api_key}&\
                     client_secret={self.secret_key}&grant_type=client_credentials"
         try:
@@ -498,7 +498,7 @@ class TongyiRobot(AbstractRobot):
         texts -- user input, typically speech, to be parsed by a module
         """
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         msg = [{"role": "user", "content": msg}]
         try:
             response = dashscope.Generation.call(
@@ -530,7 +530,7 @@ class FastGPTRobot(AbstractRobot):
         """
         FastGPT机器人
         """
-        super(FastGPTRobot, self).__init__()
+        super(self.__class__, self).__init__()
         if not api_key:
             api_key = os.getenv("FASTGPT_API_KEY")
         self.api_key = api_key
@@ -550,9 +550,8 @@ class FastGPTRobot(AbstractRobot):
     def support_stream(self):
         return True
 
-    def stream_chat(
-        self, texts, chat_id=None, data_id=None, response_id=None, vars=None, **kwargs
-    ):
+    def stream_chat(self, texts, chat_id=None, data_id=None,
+                    response_id=None, vars=None, **kwargs):
         """
         从FastGPT API获取回复
         :return: 回复
@@ -562,16 +561,16 @@ class FastGPTRobot(AbstractRobot):
             "Authorization": "Bearer " + self.api_key,
         }
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         msg = self.prefix + msg  # 增加一段前缀
-        logger.info("msg: %s", msg)
+        logger.debug("msg: " + msg)
 
         dict_msg = {"role": "user", "content": msg}
         if data_id:  # req数据ID
             dict_msg.update(dataId=data_id)
         self.context.append(dict_msg)
 
-        data = {"messages": self.context, "stream": True}
+        data = {"messages": [dict_msg], "stream": True}
         if self.app_id:
             data.update(appId=self.app_id)
         if chat_id:  # 会话ID
@@ -595,7 +594,7 @@ class FastGPTRobot(AbstractRobot):
             )
 
             def generate():
-                contants = []
+                contents = []
                 i = 0
                 for line in response.iter_lines():
                     line_str = str(line, encoding="utf-8")
@@ -607,18 +606,19 @@ class FastGPTRobot(AbstractRobot):
                         if not choices:
                             continue
                         delta_content = choices[0].get("delta", {}).get("content", "")
+                        if not delta_content:
+                            continue
                         i += 1
                         if i < 40:
                             logger.debug(delta_content)  # , end="")
                         elif i == 40:
                             logger.debug("......")
-                        contants.append(delta_content)
+                        contents.append(delta_content)
                         yield delta_content
                     elif len(line_str.strip()) > 0:
                         logger.debug(line_str)
                         yield line_str
-                self.context.append({"role": "assistant", "content": "".join(contants)})
-
+                self.context.append({"role": "assistant", "content": "".join(contents)})
         except Exception as e:
             ee = e
 
@@ -627,16 +627,8 @@ class FastGPTRobot(AbstractRobot):
 
         return generate
 
-    def chat(
-        self,
-        texts,
-        parsed,
-        chat_id=None,
-        data_id=None,
-        response_id=None,
-        vars=None,
-        **kwargs,
-    ):
+    def chat(self, texts, parsed, chat_id=None, data_id=None,
+             response_id=None, vars=None, **kwargs):
         """
         使用FastGPT机器人聊天
 
@@ -645,19 +637,19 @@ class FastGPTRobot(AbstractRobot):
         """
         header = {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + self.api_key,
+            "Authorization": "Bearer " + self.api_key
         }
         msg = "".join(texts)
-        msg = utils.stripEndPunc(msg)
+        msg = utils.strip_end_punc(msg)
         msg = self.prefix + msg  # 增加一段前缀
-        logger.info("msg: " + msg)
+        logger.debug("msg: " + msg)
 
         dict_msg = {"role": "user", "content": msg}
         if data_id:  # req数据ID
             dict_msg.update(dataId=data_id)
         self.context.append(dict_msg)
 
-        data = {"messages": self.context, "stream": False}
+        data = {"messages": [dict_msg], "stream": False}
         if self.app_id:
             data.update(appId=self.app_id)
         if chat_id:  # 会话ID
@@ -667,7 +659,7 @@ class FastGPTRobot(AbstractRobot):
         if vars:  # 变量
             data.update(variables=vars)
 
-        logger.info(f"使用 FastGPT 开始请求")
+        logger.debug(f"使用 FastGPT 开始请求")
         url = self.api_base + "/api/v1/chat/completions"
         # 请求接收流式数据
         try:
@@ -692,7 +684,8 @@ class FastGPTRobot(AbstractRobot):
             self.context.append({"role": "assistant", "content": content})
             return content
         except Exception as e:
-            logger.critical("FastGPT failed to response for %r", str(e), exc_info=True)
+            logger.critical("FastGPT failed to response for %r", str(e),
+                            exc_info=True)
             return "request error:\n" + str(e)
 
     def feedback(self, chat_id, data_id, is_good=True, opinion=None, **kwargs):
@@ -705,10 +698,7 @@ class FastGPTRobot(AbstractRobot):
         # v4.8.11之前
         # data = {"chatId": chat_id, "chatItemId": data_id,}
         # v4.8.11之后
-        data = {
-            "chatId": chat_id,
-            "dataId": data_id,
-        }
+        data = {"chatId": chat_id, "dataId": data_id, }
         if self.app_id:
             data.update(appId=self.app_id)
         if is_good:
@@ -728,7 +718,8 @@ class FastGPTRobot(AbstractRobot):
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            logger.critical("FastGPT failed to response for %r", str(e), exc_info=True)
+            logger.critical("FastGPT failed to response for %r", str(e),
+                            exc_info=True)
             return "抱歉, FastGPT反馈服务失败"
 
 

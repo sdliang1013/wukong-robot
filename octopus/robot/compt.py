@@ -103,9 +103,7 @@ class StreamStr:
     处理流式字符串: 根据规则, 屏蔽特殊字符
     """
 
-    def __init__(
-        self, re_full: list = None, re_pair: dict = None, re_special: list = None
-    ):
+    def __init__(self, re_full: list = None, re_pair: dict = None, re_special: list = None):
         """
         re_full: 全匹配内容
         re_pair: 匹配对
@@ -142,7 +140,7 @@ class StreamStr:
         # 按标点分割
         if text and text.strip():
             lines = utils.split_paragraph(text=text, token_min_n=token_min_n or 4)
-            if lines and not utils.endPunc(lines[-1]):
+            if lines and not utils.end_punc(lines[-1]):
                 self.txt_cache = lines.pop(-1) + self.txt_cache
         return lines
 
@@ -154,11 +152,11 @@ class StreamStr:
         # 去掉全匹配
         for rec in self.re_full:
             text_strip = rec.sub(repl="", string=text_strip)
-        logger.debug("cut full: %s", text_strip)
+        # logger.debug("cut full: %s", text_strip)
         # 去掉特殊字符
         for ch in self.re_special:
             text_strip = text_strip.replace(ch, "")
-        logger.debug("cut char: %s", text_strip)
+        # logger.debug("cut char: %s", text_strip)
         if clear:
             text = text_strip
         # 匹配开头
@@ -167,15 +165,18 @@ class StreamStr:
             idx = text_strip.find(pre)
             if idx > -1:
                 prefix_str = text_strip[idx:]
-                text = text[: -len(prefix_str)]
+                text = text[:-len(prefix_str)]
                 break
-        logger.debug("find prefix: %s", prefix_str)
+        # logger.debug("find prefix: %s", prefix_str)
         return text, prefix_str
 
     def wrap_text(self, text: str):
         if self.txt_cache:
             return self.txt_cache + text
         return text
+
+    def clear(self):
+        self.txt_cache = ""
 
 
 class VolumeControl:

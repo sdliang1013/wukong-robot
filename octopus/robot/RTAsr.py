@@ -144,13 +144,11 @@ class FunRTAsr(AbstractRTAsr):
     def wrap_message(self, on_message):
         def rev_message(ws, message, *args, **kwargs):
             data = json.loads(s=message)
-            logger.debug(f"FunAsr WebSocket Received Data: {data}")
+            logger.debug("FunAsr WebSocket Received Data: %s", data)
             # 封装成统一格式
             on_message(
-                AsrResponse(
-                    text=data.get("text", None), is_amend=data["mode"] == "2pass-offline"
-                )
-            )
+                AsrResponse(text=data.get('text', None),
+                            is_amend=data.get('mode', None) == "2pass-offline"))
 
         return rev_message
 

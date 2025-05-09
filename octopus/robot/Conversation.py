@@ -328,6 +328,9 @@ class Conversation(object):
         self.speaker.begin_order()
         try:
             for data in stream():
+                if not data:
+                    logger.debug("data is empty.")
+                    continue
                 # 中断
                 if self.interrupted.is_set():
                     logger.debug("响应已经被中断....")
@@ -350,6 +353,7 @@ class Conversation(object):
                     # 检测中断again
                     if self.interrupted.is_set():
                         logger.debug("响应已经被中断....")
+                        stream_tts.clear()
                         return
                     audio = self.speaker.speak_in_order(
                         line=line, req_id=resp_uuid, index=index, cache=cache
@@ -531,7 +535,7 @@ class OrderSpeaker:
         :param on_completed: 完成的回调
         """
         audios = []
-        msg = utils.stripEndPunc(msg).strip()
+        msg = utils.strip_end_punc(msg).strip()
         if not msg:
             return audios
         logger.debug("即将朗读语音：%s", msg)

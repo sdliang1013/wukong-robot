@@ -282,41 +282,43 @@ class VoiceListener:
         rate = 16000
         channel = 1
         chunk = int(rate * 2 * channel * self.chunk_time / 1000)
+        chunk = 4096
         # frames = int(rate / 1000 * chunk)
-        frames = 4096
         data_silent = b"".join([b"\x00" for i in range(chunk)])
 
         p = pyaudio.PyAudio()
 
-        stream = p.open(
-            format=pyaudio.paInt16,
-            channels=channel,
-            rate=rate,
-            input=True,
-            frames_per_buffer=frames,
-        )
-        # 发送语音前, 要先发送MetaInfo
+        def _open_stream():
+            return p.open(format=pyaudio.paInt16,
+                          channels=channel,
+                          rate=rate,
+                          input=True,
+                          start=False,
+                          frames_per_buffer=chunk,
+                          stream_callback=self._wrap_on_voice(on_voice=on_voice,
+                                                              data_silent=data_silent))
+
+
+        # 语音唤醒模式(发送语音前, 要先发送MetaInfo)
+        self.resume_listen()
+        # 启动录音
+        stream = _open_stream()
+        stream.start_stream()
+        # 线程hold
         while self.running.is_set():
-            # last_time = time.time()
-            data = stream.read(chunk)
-            try:
-                # 发送空内容, 触发offline
-                if not self.listening.is_set():
-                    data = data_silent
-                on_voice(data)
-            except:
-                logger.critical("语音识别异常.", exc_info=True)
-            # db = self.calculate_db(data=data)
-            # # 开始请求
-            # if db > self.db_threshold:
-            #     logger.info(msg=f"录音分贝: {db}")
-            #     self.record_and_send(stream=stream, rate=rate,
-            #                         chunk=chunk, seconds=self.rec_seconds)
-            # 计算休眠时间
-            # interval_time = self.sleep_time(last_time=last_time)
-            # if interval_time <= 0:
-            #     interval_time = self.interval_time
+            if not stream.is_active():
+                stream.close()
+                stream = _open_stream()
+                stream.start_stream()
             time.sleep(self.interval_time)
+        # 停止音频流并关闭
+        if stream.is_active():
+            logger.warning("停止录音...")
+            stream.stop_stream()
+            stream.close()
+            logger.warning("录音已停止.")
+        # 终止 PyAudio 对象
+        p.terminate()
 
     def sleep_time(self, last_time: float) -> float:
         """音频块时长"""
@@ -338,12 +340,6 @@ class VoiceListener:
     def is_silent(cls, data: bytes):
         return len(data) == data.count(b"\x00")
 
-    @classmethod
-    def record_and_send(cls, stream, rate, chunk, seconds, on_voice):
-        for _ in range(0, int(rate / chunk * seconds)):
-            data = stream.read(num_frames=chunk)
-            on_voice(data)
-
     def resume_listen(self):
         if self.listening.is_set():
             return
@@ -361,3 +357,27 @@ class VoiceListener:
                 handle=self.resume_listen,
             )
         logger.debug("暂停录音")
+
+    def _wrap_on_voice(self, on_voice, data_silent):
+        """录音回调处理"""
+        import pyaudio
+
+        def inner(data,
+                  frame_count,  # number of frames
+                  time_info,  # dictionary
+                  status_flags) -> tuple:
+            # 数据判断
+            if not data:
+                logger.debug("Stream.read has no data.")
+                return None, pyaudio.paContinue
+            if not self.listening.is_set():
+                data = data_silent
+            try:
+                if on_voice:
+                    on_voice(data)
+                return None, pyaudio.paContinue
+            except:
+                logger.critical("语音识别处理异常.", exc_info=True)
+                return None, pyaudio.paContinue
+
+        return inner

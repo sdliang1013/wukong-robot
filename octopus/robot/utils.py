@@ -353,34 +353,34 @@ def getPunctuations(text):
     return punc_en
 
 
-def startPunc(s: str):
+def start_punc(s: str):
     """
     字符串末尾是标点
     """
     return s and s[0] in getPunctuations(s)
 
 
-def endPunc(s: str):
+def end_punc(s: str):
     """
     字符串末尾是标点
     """
     return s and s[-1] in getPunctuations(s)
 
 
-def stripEndPunc(s: str):
+def strip_end_punc(s: str):
     """
     移除字符串末尾的标点
     """
-    if endPunc(s):
+    if end_punc(s):
         return s[:-1]
     return s
 
 
-def stripStartPunc(s: str):
+def strip_start_punc(s: str):
     """
     移除字符串开头的标点
     """
-    if startPunc(s):
+    if start_punc(s):
         return s[1:]
     return s
 

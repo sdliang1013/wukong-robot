@@ -93,7 +93,7 @@ class RealTimeDetector(AbstractDetector):
         # 空判断
         if not data.text:
             return
-        text = utils.stripStartPunc(data.text)
+        text = utils.strip_start_punc(data.text)
         is_amend = data.is_amend
         logger.debug("%s: %s", "识别结果" if is_amend else "实时内容", text)
         with self.msg_lock:
@@ -118,7 +118,7 @@ class RealTimeDetector(AbstractDetector):
         for kw, l_kw in self.keywords.items():
             idx = text.find(kw)
             if idx >= 0:
-                return True, utils.stripStartPunc(text[l_kw + idx :])
+                return True, utils.strip_start_punc(text[l_kw + idx :])
         return False, ""
 
     def _on_detected(self, text: str = None, end: bool = False):

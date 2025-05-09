@@ -113,7 +113,7 @@ class RealTimeRecognizer(AbstractRecongnizer):
         # 空判断
         if not text:
             return
-        text = utils.stripStartPunc(text)
+        text = utils.strip_start_punc(text)
         logger.debug("%s: %s", "识别结果" if is_amend else "实时内容", text)
         with self.msg_lock:
             real_text = text
@@ -196,7 +196,7 @@ class RealTimeRecognizer(AbstractRecongnizer):
         for kw, l_kw in self.keywords.items():
             idx = text.find(kw)
             if idx >= 0:
-                return utils.stripStartPunc(text[l_kw + idx :])
+                return utils.strip_start_punc(text[l_kw + idx :])
         return text
 
     def _append_text(self, text, is_amend):

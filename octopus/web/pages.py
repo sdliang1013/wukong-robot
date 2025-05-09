@@ -116,7 +116,7 @@ class ChatWebSocketHandler(WebSocketHandler, BaseHandler):
 
 class ChatHandler(BaseHandler):
     def onResp(self, msg, audio, plugin):
-        logger.info(f"response msg: {msg}")
+        logger.debug(f"response msg: {msg}")
         res = {
             "code": 0,
             "message": "ok",
